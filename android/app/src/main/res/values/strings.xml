@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">iTantra</string>
+
+    <!-- Foreground service notification. Worded so a user who sees it in the
+         shade understands why the microphone indicator is lit. -->
+    <string name="service_channel_name">Voice link</string>
+    <string name="service_channel_description">Keeps the voice link running while the screen is off.</string>
+    <string name="service_title">Voice link active</string>
+    <string name="service_text">Listening on this device only. Nothing is uploaded.</string>
+</resources>

@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>iTantra</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>itantra</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+
+	<!-- Permission strings. Worded plainly: a vague purpose string is both an
+	     App Store rejection and, more importantly, the reason users deny a
+	     microphone prompt on an app whose entire function is voice. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>iTantra transcribes your speech on this device so it can be sent as text over a low-bandwidth link. Audio never leaves your phone and is never uploaded.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>iTantra uses Bluetooth to connect directly to a nearby phone or bridge device when there is no network.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>iTantra uses Bluetooth to connect directly to a nearby phone or bridge device when there is no network.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>iTantra connects to a paired phone over your local Wi-Fi network. It does not contact any server on the internet.</string>
+
+	<!-- Bonjour service used only for peer discovery on the local link. -->
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_itantra._tcp</string>
+	</array>
+
+	<!-- The iOS equivalent of Android's microphone-typed foreground service.
+	     Without this the session is suspended seconds after the screen locks,
+	     and a walkie-talkie that stops working in a pocket is useless.
+	     `voip` additionally allows the session to be resumed for an incoming
+	     alert. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>bluetooth-central</string>
+		<string>bluetooth-peripheral</string>
+		<string>voip</string>
+	</array>
+
+	<!-- No ATS exceptions: the app makes no HTTP requests of any kind. This
+	     is the iOS counterpart of omitting the INTERNET permission on
+	     Android, and it is the fully-offline requirement made structural. -->
+
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+</dict>
+</plist>

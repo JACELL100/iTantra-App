@@ -1,0 +1,4 @@
+# Model packs are side-loaded at runtime into <app support>/packs/, never
+# bundled into the APK: they are hundreds of megabytes and most upstream
+# licences forbid redistribution. This directory only exists so the asset
+# path declared in pubspec.yaml resolves on a fresh clone.

@@ -1,0 +1,48 @@
+iTantra - Indian Multilingual TTS & STT Aided Neural Transceiver
+Copyright 2026 the iTantra contributors
+
+This product includes software developed for Smart India Hackathon problem
+statement 26173 (Indian Space Research Organisation, Department of Space).
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+--------------------------------------------------------------------------
+Third-party components used at runtime (fetched by `flutter pub get`)
+--------------------------------------------------------------------------
+
+Flutter and Dart SDK                       BSD-3-Clause
+onnxruntime (Dart FFI bindings)            MIT
+ONNX Runtime (native library)              MIT
+sqflite, path, path_provider               MIT / BSD-2-Clause
+shared_preferences, crypto, cryptography   BSD-3-Clause / Apache-2.0
+permission_handler                         MIT
+flutter_blue_plus                          BSD-3-Clause
+network_info_plus                          BSD-3-Clause
+qr_flutter                                 BSD-3-Clause
+kotlinx-coroutines, androidx.core-ktx      Apache-2.0
+
+--------------------------------------------------------------------------
+Model weights (NOT distributed with this source)
+--------------------------------------------------------------------------
+
+No model weights are included in this repository. Packs are built locally
+with tools/build_pack.py and side-loaded onto the device. Each pack records
+its own licence in manifest.json, and the app marks a pack as
+non-redistributable when its licence forbids redistribution.
+
+  AI4Bharat IndicConformer-600M (ASR)      MIT
+  ARTPARK-IISc DhVaani-0.5 (TTS)           Apache-2.0
+  AI4Bharat IndicF5 (TTS)                  see upstream repository
+
+  eSpeak NG                                GPL-3.0
+    Used at BUILD TIME ONLY, as a generator of pronunciation rules that are
+    compiled into a pack's lexicon. The eSpeak NG library is never linked
+    into, bundled with, or loaded by the application, so its copyleft terms
+    do not extend to this source or to the resulting APK.
+
+  facebook/mms-tts-ory (Odia TTS)          CC-BY-NC-4.0
+    EXCLUDED. The non-commercial clause makes it unusable for a deployable
+    system. It is listed here only so that nobody adds it back by accident.
+
+Anyone building packs is responsible for complying with the licence of each
+upstream model.

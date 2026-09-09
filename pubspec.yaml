@@ -1,0 +1,68 @@
+name: itantra
+description: >-
+  iTantra - offline multilingual push-to-talk transceiver for low-bitrate links.
+  Speech is recognised on-device, sent as a few hundred bytes of text over
+  Wi-Fi/Bluetooth, and re-synthesised as speech on the receiving phone.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.24.0"
+
+# ---------------------------------------------------------------------------
+# Dependency policy
+# ---------------------------------------------------------------------------
+# Every dependency below is permissively licensed (BSD-3/MIT/Apache-2.0) and is
+# verified by tools/license_audit.py. Nothing here performs network I/O at
+# runtime: the app must work with the radio switched off, and
+# core/transport/offline_guard.dart enforces that at the socket layer.
+#
+# For an offline build, run `flutter pub get` once on a connected machine and
+# then vendor the pub cache (see docs/offline_installation.md). Judges with no
+# network can build from the vendored cache.
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Inference. onnxruntime exposes the ONNX Runtime C API over dart:ffi and
+  # ships the prebuilt .so for arm64-v8a / armeabi-v7a. MIT.
+  onnxruntime: ^1.4.1
+
+  # Local persistence for the conversation log. BSD-2.
+  sqflite: ^2.3.3
+  path: ^1.9.0
+  path_provider: ^2.1.4
+
+  # Settings (selected language, PTT/handsfree mode, alert volume policy). BSD-3.
+  shared_preferences: ^2.3.2
+
+  # Hashing for model-pack verification and the pairing short authentication
+  # string. BSD-3.
+  crypto: ^3.0.5
+  # X25519 + AES-GCM in pure Dart with an AndroidCryptoKit fast path. Apache-2.0.
+  cryptography: ^2.7.0
+
+  # Runtime permissions (mic, nearby devices, notifications). MIT.
+  permission_handler: ^11.3.1
+
+  # BLE central role for the ESP32 bridge path. BSD-3.
+  flutter_blue_plus: ^1.32.12
+
+  # Reads the local Wi-Fi address so the pairing QR can carry it. MIT.
+  network_info_plus: ^5.0.3
+
+  # QR pairing: generation is offline, scanning uses the on-device camera. MIT.
+  qr_flutter: ^4.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    # Bundled only in the `bundle` build; the lean build ships no weights and
+    # imports packs from storage instead. See docs/offline_installation.md.
+    - assets/packs/

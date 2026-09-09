@@ -1,0 +1,19 @@
+{
+  "description": "Canonical text message. The Kotlin codec and the bridge firmware are both checked against this file so a change on one side cannot silently diverge from the other.",
+  "message": {
+    "type": "text",
+    "messageId": "aaaa-0000000000000001",
+    "sentAtMs": 1700000000000,
+    "languageTag": "hi-IN",
+    "text": "सब ठीक है",
+    "sequence": 1,
+    "continuation": false,
+    "asrConfidence": 0.92
+  },
+  "encodedJson": "{\"t\":\"text\",\"i\":\"aaaa-0000000000000001\",\"s\":1700000000000,\"l\":\"hi-IN\",\"x\":\"सब ठीक है\",\"q\":1,\"c\":false,\"f\":92}",
+  "notes": [
+    "Devanagari is transmitted as UTF-8, not escaped, so the payload stays 3 bytes per character instead of 6.",
+    "asrConfidence is quantised to whole percent (0.92 -> 92) because two decimals of a confidence score cost bytes and change no decision.",
+    "The frame header prepended by Framing is 49 54 01 followed by a 24-bit big-endian payload length."
+  ]
+}

@@ -1,0 +1,23 @@
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+
+# Model packs are large and licence-sensitive; they never enter the repo.
+assets/packs/*
+!assets/packs/.gitkeep
+
+# Android build output
+android/.gradle/
+android/local.properties
+android/app/release/
+*.apk
+*.aab
+*.keystore
+*.jks
+
+.idea/
+*.iml
+.DS_Store

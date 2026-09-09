@@ -1,0 +1,25 @@
+{
+  "description": "Distress alert with repetition. Included as a vector because severity decoding is the one field where a corrupted byte could change behaviour dangerously.",
+  "message": {
+    "type": "alert",
+    "messageId": "bbbb-0000000000000007",
+    "sentAtMs": 1700000000500,
+    "languageTag": "or-IN",
+    "text": "ତୁରନ୍ତ ସାହାଯ୍ୟ ପଠାନ୍ତୁ",
+    "severity": "DISTRESS",
+    "repeatCount": 3
+  },
+  "encodedJson": "{\"t\":\"alert\",\"i\":\"bbbb-0000000000000007\",\"s\":1700000000500,\"l\":\"or-IN\",\"x\":\"ତୁରନ୍ତ ସାହାଯ୍ୟ ପଠାନ୍ତୁ\",\"v\":\"DISTRESS\",\"r\":3}",
+  "negativeCases": [
+    {
+      "input": "{\"t\":\"alert\",\"i\":\"x\",\"s\":1,\"l\":\"en-IN\",\"x\":\"hi\",\"v\":\"NONSENSE\",\"r\":2}",
+      "expected": "decodes with severity WARNING",
+      "reason": "An unknown severity must degrade downward. A corrupted byte must never be able to trigger the loudest, non-interruptible announcement."
+    },
+    {
+      "input": "{\"t\":\"alert\",\"i\":\"x\",\"s\":1,\"l\":\"klingon\",\"x\":\"hi\",\"v\":\"INFO\",\"r\":1}",
+      "expected": "rejected as MalformedMessage",
+      "reason": "Language tags are validated against ^[a-z]{2}-[A-Z]{2}$ so an unmatched tag cannot select an arbitrary voice pack."
+    }
+  ]
+}

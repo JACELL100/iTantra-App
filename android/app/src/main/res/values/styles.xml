@@ -1,11 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Shown while the Flutter engine warms up, so the first frame is not a
-         white flash. -->
+    <!--
+      The window theme for the moment before Flutter has drawn its first frame.
+
+      The background is the app's own surface colour rather than plain white, so
+      the cold start reads as one continuous screen. On a 2 GB handset with the
+      recogniser loading, that window is visible for a moment, and a white flash
+      into a dark UI - or the reverse at night - is the most jarring thing a
+      launch can do.
+    -->
     <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
-        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:windowBackground">@color/launch_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
     </style>
 
+    <!--
+      Restored once Flutter is running. The background is the platform's own
+      colour so a rotation or a resumed activity does not flash the launch
+      colour over content that is already on screen.
+    -->
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowBackground">?android:colorBackground</item>
     </style>

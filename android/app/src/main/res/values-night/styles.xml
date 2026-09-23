@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The dark counterpart of values/styles.xml.
+
+      This file exists because the app's dark theme is the one that gets used in
+      the field: a distress message is often read at night, and a launch window
+      that flashes a light background on a dark-adapted eye is genuinely painful
+      and costs a second of vision. The parent switches to the platform's dark
+      chrome so the status bar icons stay legible too.
+    -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@color/launch_background_dark</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+    </style>
+
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">?android:colorBackground</item>
+    </style>
+</resources>

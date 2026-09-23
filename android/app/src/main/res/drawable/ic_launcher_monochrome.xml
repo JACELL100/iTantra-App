@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The themed-icon layer.
+
+  Same mark as the coloured foreground, in a single flat colour: Android 13+
+  tints this itself, and a second colour here would be ignored at best and
+  produce a muddy silhouette at worst. Kept as a separate file rather than
+  reusing the coloured one because the coloured version's alternating opacity
+  reads as noise once the system flattens it.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:pathData="M 23.93,55.06 A 32,32 0 0 1 84.07,55.06" />
+
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="5.5"
+        android:strokeLineCap="round"
+        android:pathData="M 32.39,58.13 A 23,23 0 0 1 75.61,58.13" />
+
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="6.5"
+        android:strokeLineCap="round"
+        android:pathData="M 40.85,61.21 A 14,14 0 0 1 67.15,61.21" />
+
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M 54,60 m -6.2,0 a 6.2,6.2 0 1,0 12.4,0 a 6.2,6.2 0 1,0 -12.4,0" />
+</vector>

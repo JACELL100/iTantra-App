@@ -5,9 +5,10 @@ import UIKit
 /// iOS host.
 ///
 /// Mirrors `MainActivity.kt`: the Dart side owns all logic, and Swift exists
-/// only for the four surfaces Flutter cannot reach without native code -
-/// PCM capture, PCM playback with session control, platform capability
-/// reporting, and the (unavailable) Classic Bluetooth link.
+/// only for the five surfaces Flutter cannot reach without native code -
+/// PCM capture, PCM playback with session control, the device's own
+/// text-to-speech engine, platform capability reporting, and the
+/// (unavailable) Classic Bluetooth link.
 ///
 /// There is no service to start here. On iOS the `audio` background mode in
 /// Info.plist, combined with an active AVAudioSession, is what keeps capture
@@ -18,6 +19,7 @@ import UIKit
 
   private var capture: AudioCapturePlugin?
   private var playback: AudioPlaybackPlugin?
+  private var systemTts: SystemTtsPlugin?
   private var rfcomm: RfcommPlugin?
   private var platformInfo: PlatformInfoPlugin?
 
@@ -37,6 +39,7 @@ import UIKit
     let messenger = controller.binaryMessenger
     capture = AudioCapturePlugin(messenger: messenger)
     playback = AudioPlaybackPlugin(messenger: messenger)
+    systemTts = SystemTtsPlugin(messenger: messenger)
     rfcomm = RfcommPlugin(messenger: messenger)
     platformInfo = PlatformInfoPlugin(messenger: messenger)
 
@@ -60,6 +63,7 @@ import UIKit
   override func applicationWillTerminate(_ application: UIApplication) {
     capture?.detach()
     playback?.detach()
+    systemTts?.detach()
     rfcomm?.detach()
     super.applicationWillTerminate(application)
   }

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The mark: a transmission source with three waves radiating from it.
+
+  Geometry notes, because they are not arbitrary:
+   - The adaptive-icon canvas is 108x108 with a 72x72 safe zone centred at
+     (54,54). Every path here stays inside a 36-unit radius of that centre, so
+     no part of the mark is clipped by a circular, squircle or square mask.
+   - Three waves, not five: at 48 px on a low-density phone, five strokes merge
+     into a smudge. Three is the most that stays legible at the smallest size
+     this icon is ever drawn.
+   - The strokes thicken as they come in. That is a deliberate optical
+     correction - thin strokes at a larger radius read as lighter, and without
+     it the mark looks like it is fading outward when it should read as
+     radiating outward.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Outermost wave, radius 32 from the source at (54,66). -->
+    <path
+        android:strokeColor="#FF7A2F"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:pathData="M 23.93,55.06 A 32,32 0 0 1 84.07,55.06" />
+
+    <!-- Middle wave, radius 23. -->
+    <path
+        android:strokeColor="#FF9451"
+        android:strokeWidth="5.5"
+        android:strokeLineCap="round"
+        android:pathData="M 32.39,58.13 A 23,23 0 0 1 75.61,58.13" />
+
+    <!-- Innermost wave, radius 14. -->
+    <path
+        android:strokeColor="#FFB27A"
+        android:strokeWidth="6.5"
+        android:strokeLineCap="round"
+        android:pathData="M 40.85,61.21 A 14,14 0 0 1 67.15,61.21" />
+
+    <!-- The source itself. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M 54,60 m -6.2,0 a 6.2,6.2 0 1,0 12.4,0 a 6.2,6.2 0 1,0 -12.4,0" />
+</vector>

@@ -196,25 +196,53 @@ class NumberNormalizer {
     if (token.contains('.')) {
       final List<String> parts = token.split('.');
       final String whole = _speakNumber(parts[0], languageTag);
-      final String fraction = parts[1]
-          .split('')
-          .map((String d) => digits[int.parse(d)])
-          .join(' ');
+      final String fraction = _speakDigits(parts[1], digits);
       return '$whole ${scales['point']} $fraction';
     }
 
     final int? value = int.tryParse(token);
     if (value == null) return token;
 
-    // Digit strings that are identifiers rather than quantities - a five
-    // digit grid reference, say - are read digit by digit, which is how
-    // radio operators read them anyway and avoids inventing wrong grammar.
-    if (token.length > 4 || (token.length > 1 && token.startsWith('0'))) {
-      return token.split('').map((String d) => digits[int.parse(d)]).join(' ');
+    // A leading zero means the token is a code, never a quantity: "07" is not
+    // seven, it is zero-seven.
+    if (token.length > 1 && token.startsWith('0')) {
+      return _speakDigits(token, digits);
+    }
+
+    // Digit strings that are identifiers rather than quantities - a five digit
+    // grid reference, say - are read digit by digit, which is how radio
+    // operators read them anyway and avoids inventing wrong grammar.
+    //
+    // Long round numbers are the exception. Six digits and above, ending in
+    // enough zeros to be a magnitude rather than a serial, is how a count or a
+    // distance is actually spoken, and "do laakh" is both shorter and closer to
+    // what a listener expects than six separate digit names. Without this the
+    // lakh and crore scale words could never be reached at all, because every
+    // token that large was being read out one digit at a time.
+    if (token.length > 4 && !_isMagnitude(token)) {
+      return _speakDigits(token, digits);
     }
 
     return _speakInteger(value, digits, scales);
   }
+
+  /// True for a rounded magnitude in the lakh range or above.
+  ///
+  /// Three trailing zeros is the test, which keeps a six-digit serial such as
+  /// `123456` reading digit by digit while `123000` becomes "one lakh twenty
+  /// three thousand". Below six digits nothing is treated as a magnitude,
+  /// however round it is: `1500` stays a plain number and `10000` is still read
+  /// as a quantity by [_speakInteger] rather than being forced into a scale.
+  static bool _isMagnitude(String token) {
+    if (token.length < 6) return false;
+    return token.endsWith('000');
+  }
+
+  /// Reads every digit of [token] as its own word.
+  static String _speakDigits(String token, List<String> digits) => token
+      .split('')
+      .map((String d) => digits[int.parse(d)])
+      .join(' ');
 
   static String _speakInteger(
     int value,
@@ -244,11 +272,7 @@ class NumberNormalizer {
       // digit-wise reading that is always understood.
       parts.add(value < 10
           ? digits[value]
-          : value
-              .toString()
-              .split('')
-              .map((String d) => digits[int.parse(d)])
-              .join(' '));
+          : _speakDigits(value.toString(), digits));
     }
 
     return parts.join(' ');

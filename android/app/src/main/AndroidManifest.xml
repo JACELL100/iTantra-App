@@ -2,14 +2,24 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-      There is deliberately NO android.permission.INTERNET.
+      INTERNET is declared, and it has to be.
 
-      "Fully offline only" is a hard requirement of the brief, and the most
-      credible way to satisfy it is to make network access impossible rather
-      than merely unused: without this permission the OS itself refuses every
-      socket to a non-local address, so no dependency can phone home either.
-      Link-local TCP to a paired phone does not need it.
+      This is worth stating plainly because the obvious way to read "fully
+      offline only" is to delete this permission, and that is wrong. Android
+      refuses every AF_INET socket to an app without INTERNET - including one
+      to 127.0.0.1 - because the permission maps to a supplementary group on
+      the process rather than to a destination filter. Removing it would not
+      make the app more offline; it would make the phone-to-phone Wi-Fi link
+      impossible, and the link is the product.
+
+      So the offline guarantee is enforced where it can actually be enforced:
+      every socket in this app is opened through OfflineGuard, which refuses
+      anything outside 127/8, 169.254/16, 10/8, 172.16/12 and 192.168/16, and
+      refuses hostnames outright because resolving one is itself network
+      activity. That is covered by test/offline_guard_test.dart, and the
+      release build additionally contains no HTTP client of any kind.
     -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -99,6 +109,17 @@
             android:name=".CommunicationService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <!--
+          Backs the notification's Stop action.
+
+          Not exported, so no other app can end this app's session; the
+          broadcast it listens for is also package-named, which means both the
+          component and the action name have to match before anything happens.
+        -->
+        <receiver
+            android:name=".SessionStopReceiver"
+            android:exported="false" />
 
         <meta-data
             android:name="flutterEmbedding"

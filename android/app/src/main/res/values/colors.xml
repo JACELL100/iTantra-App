@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      These four values are the whole native palette. Everything else is drawn
+      by Flutter from lib/ui/theme.dart, and the two are kept deliberately
+      aligned: a launch window that flashes a different colour than the first
+      frame is the most jarring thing a slow cold start can do.
+    -->
+
+    <!-- Structural blue: the calm, chrome colour. -->
+    <color name="brand_deep_blue">#0B4F8A</color>
+
+    <!-- Signal saffron: transmit, "live", the mark on the icon. -->
+    <color name="brand_saffron">#E8590C</color>
+
+    <color name="ic_launcher_background">@color/brand_deep_blue</color>
+
+    <!-- Matches ColorScheme.surface in both schemes. -->
+    <color name="launch_background">#FAFAF8</color>
+    <color name="launch_background_dark">#0D1114</color>
+
+    <color name="notification_icon">#FFFFFFFF</color>
+</resources>

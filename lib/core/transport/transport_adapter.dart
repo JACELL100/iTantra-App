@@ -72,6 +72,36 @@ class LinkDisconnected extends LinkState {
   final bool recoverable;
 }
 
+/// A link-state stream that also remembers the latest event.
+///
+/// Every transport needs both a push channel and a synchronous answer, and the
+/// answer has to be available the instant `connect()` returns - a caller that
+/// only had the stream would have to wait for an event that has already been
+/// delivered, or miss it entirely by subscribing a moment too late.
+///
+/// Composition rather than a [StreamController] subclass so each transport can
+/// keep publishing with a bare `add` and reading `isClosed` unchanged.
+class LinkStateChannel {
+  final StreamController<LinkState> _controller =
+      StreamController<LinkState>.broadcast();
+
+  LinkState _current = const LinkIdle();
+
+  /// The state right now.
+  LinkState get current => _current;
+
+  Stream<LinkState> get stream => _controller.stream;
+
+  bool get isClosed => _controller.isClosed;
+
+  void add(LinkState next) {
+    _current = next;
+    if (!_controller.isClosed) _controller.add(next);
+  }
+
+  Future<void> close() => _controller.close();
+}
+
 class LinkQuality {
   const LinkQuality({
     this.roundTripMs,
@@ -116,7 +146,11 @@ class TransportException implements Exception {
 abstract class TransportAdapter {
   TransportDescriptor get descriptor;
 
-  Stream<LinkState> get state;
+  /// The link state right now, without awaiting a stream event.
+  LinkState get state;
+
+  /// Link state transitions, for anything that has to react to them.
+  Stream<LinkState> get states;
 
   /// Decoded frames, already de-framed by the transport.
   Stream<Uint8List> get inbound;

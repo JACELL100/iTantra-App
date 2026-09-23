@@ -6,7 +6,12 @@ plugins {
 
 android {
     namespace = "org.itantra.flutterhost"
-    compileSdk = 35
+    // Compile against the highest SDK installed. `compileSdk` only decides which
+    // APIs are visible to the compiler - it does not change what the app asks
+    // for at runtime, which is `targetSdk` - and three of the plugins are built
+    // against 36, so 35 produces a warning on every build and would eventually
+    // be a hard failure.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

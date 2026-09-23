@@ -30,7 +30,7 @@ so; an unmarked gap that a judge finds costs more than a declared one.
 | Metric (weight) | How it is addressed | Where measured |
 | --- | --- | --- |
 | Efficiency (20%) - model size, app size, idle CPU | Packs are side-loaded, never bundled; R8 full mode and resource shrinking; only arm64 and armeabi-v7a; iOS compiles out unused permission_handler permissions; the idle path is a pure-Dart energy VAD with no neural net until speech is detected, target under 2% of one core | Diagnostics screen (pack count, total bytes); benchmark harness in `tools/` |
-| Accuracy (40%) - low WER, legible TTS | Frontend parity enforced by `ml/export/verify_frontend.py` to 1e-3; hardware echo cancellation via VOICE_COMMUNICATION and .voiceChat; per-language digit and number expansion so no digit reaches the acoustic model; confidence surfaced and low-confidence messages flagged | `test/number_normalizer_test.dart`; pack-level WER in `tools/` |
+| Accuracy (40%) - low WER, legible TTS | Frontend parity enforced by `ml/export/verify_frontend.py` to 1e-3; **automatic gain control, noise suppression and echo cancellation are deliberately turned off** on both platforms (`VOICE_RECOGNITION` on Android, `.measurement` on iOS) because gain control pumps the noise floor in exactly the pauses the VAD has to judge; per-language digit and number expansion so no digit reaches the acoustic model; confidence surfaced and low-confidence messages flagged | `test/number_normalizer_test.dart`; pack-level WER in `tools/` |
 | Latency (20%) - word to STT, text to audio, RTF, phone-to-phone delta | Twelve-stage timeline from a0SpeechEnd to b5PlaybackDone, stamped natively at capture and at first-audible; targets are send p95 under 900 ms, receive p95 under 700 ms, delta p95 under 1500 ms, ASR RTF under 0.6, TTS RTF under 0.5 | `metrics.dart` and the diagnostics screen p50/p95 rows |
 
 ## Software and framework restrictions
@@ -39,7 +39,7 @@ so; an unmarked gap that a judge finds costs more than a declared one.
 | --- | --- |
 | Open-source only; no proprietary or commercial voice-activation SDKs | No SDK performs voice activation - the VAD is about 200 lines of Dart in `vad.dart`. Every dependency and its licence is listed in `NOTICE`. No platform speech APIs, no Picovoice, no cloud SDK |
 | Allowed frameworks: open-source ML or TinyML, such as TFLite Micro or PyTorch Mobile | ONNX Runtime (MIT) through the `onnxruntime` Dart FFI package. This satisfies "or similar": ONNX Runtime is the standard open-source mobile inference runtime and is the format the upstream Indic models export to. Rationale is in the runtime-selection section of `implementation_plan.md` |
-| Fully offline; no internet-hosted APIs | The Android manifest declares no INTERNET permission, so a network call is impossible rather than merely absent. iOS has no equivalent permission, so it is enforced by having no HTTP client in the source, no ATS exceptions, a single `_itantra._tcp` Bonjour service, and `OfflineGuard`, which rejects any non-link-local address and is unit-tested in `test/offline_guard_test.dart` |
+| Fully offline; no internet-hosted APIs | Enforced at the socket layer, identically on both platforms: `OfflineGuard.requireLinkLocal` runs before every `connect` and every accepted peer is re-checked, refusing anything outside 127/8, 169.254/16, 10/8, 172.16/12 and 192.168/16 and refusing hostnames outright. Unit-tested in `test/offline_guard_test.dart`. There is no HTTP client, no ATS exception and no analytics SDK in the source, so no code path reaches a routable address even if the guard were bypassed. Note: `INTERNET` *is* declared on Android, because Android refuses every socket - including 127.0.0.1 - without it; the permission is a precondition for the local link, not a statement about destination |
 | Runs on low and mid-range phones | minSdk 26; quantised packs; streaming synthesis so the first audio does not wait for full generation; no background neural net |
 
 ## Declared gaps
@@ -55,6 +55,43 @@ so; an unmarked gap that a judge finds costs more than a declared one.
    different frontends.
 3. iOS alert volume and Classic Bluetooth. See `docs/ios_parity.md`. In a
    mixed pair, prefer Android at the alerting end.
-4. No packs or built binaries in this drop. It was produced in a sandbox with
-   no network, so pub get, CocoaPods and Gradle never ran. The source is
-   complete; expect a small number of mechanical first-build fixes.
+4. No model packs are bundled, by design and by licence. The app's audio
+   quality therefore has not been measured on a device - the pipeline around
+   the models has, but not the models.
+5. iOS is unbuilt. It was written on Windows with no macOS available, so the
+   Swift compiles against nothing. Its channel contracts match the Kotlin
+   implementation byte for byte by construction, and `tools/bootstrap_ios.sh`
+   refuses to proceed if any Swift source is missing from the Runner target,
+   but the first `pod install` on a Mac is the real test.
+6. Waiting time on a real radio. Latency is measured against
+   `LoopbackTransport`'s modelled profiles, not against two physical phones on
+   a real Bluetooth or Wi-Fi Direct link.
+
+## Verification status
+
+What has actually been run, as opposed to written:
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Static analysis | `flutter analyze` | No issues found |
+| Unit tests | `flutter test` | 36/36 passing |
+| Release build, R8 full mode and resource shrinking | `flutter build apk --release` | Builds warning-free, 73.5 MB universal |
+| Installs and runs on hardware | `adb install -r` on a Galaxy A03s, Android 13, arm64 | Launches, no exceptions in logcat across cold starts |
+| iOS | — | Not run; see gap 5 |
+| Speech quality, WER, RTF, MOS | — | Not measurable without packs; see gap 4 |
+
+Two runtime defects were found by running the app on the phone rather than by
+any test, and both are worth recording because neither would have been caught
+by the unit suite:
+
+- **SQLite failed to open.** `PRAGMA journal_mode = WAL` returns a row, and
+  `sqflite`'s `execute()` refuses any statement that does. The throw happened
+  inside `onConfigure`, which aborted the whole open, so the app ran with no
+  transcript storage at all. Fixed by using `rawQuery` for pragmas and by
+  treating a failed pragma as a warning rather than a fatal error - a tuning
+  flag must never be able to stop the app from storing a message.
+- **Playback threw on the first chunk of every message.** The Android plugin
+  returned a boolean where Dart read an integer, so the cast raised a
+  `TypeError` that no handler caught. The value is the monotonic timestamp of
+  the first audible sample, which is one end of the measured phone-to-phone
+  latency, and both native implementations now return it as an integer.

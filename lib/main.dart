@@ -13,13 +13,15 @@ import 'di/service_locator.dart';
 /// scan decides which languages the UI may offer; showing a language picker
 /// and then removing options a second later is worse than a short splash.
 Future<void> main() async {
-  runZonedGuarded<Future<void>>(() async {
+  await runZonedGuarded<Future<void>>(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
-    // Landscape would put the talk button somewhere different on every
-    // device, and this is a button people find without looking.
+    // Portrait on a phone keeps the one control that matters - the talk button
+    // - in the same place every time. On a wide window it would sit somewhere
+    // different on every device, and this is a button people find without
+    // looking.
     await SystemChrome.setPreferredOrientations(
-      <DeviceOrientation>[DeviceOrientation.portraitUp],
+      const <DeviceOrientation>[DeviceOrientation.portraitUp],
     );
 
     FlutterError.onError = (FlutterErrorDetails details) {

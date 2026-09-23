@@ -80,6 +80,15 @@ class ProtocolCodec {
         return FloorMessage.fromJson(parsed);
       case MessageKind.capabilities:
         return CapabilitiesMessage.fromJson(parsed);
+      case MessageKind.handshake:
+        // Public keys are validated inside, because a malformed key must be
+        // rejected before it reaches the key-agreement routine rather than
+        // crashing inside it. A bad key is a decode failure, not a crash.
+        try {
+          return HandshakeMessage.fromJson(parsed);
+        } on FormatException catch (e) {
+          throw CodecException('bad handshake: ${e.message}');
+        }
     }
   }
 

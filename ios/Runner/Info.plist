@@ -56,9 +56,14 @@
 		<string>voip</string>
 	</array>
 
-	<!-- No ATS exceptions: the app makes no HTTP requests of any kind. This
-	     is the iOS counterpart of omitting the INTERNET permission on
-	     Android, and it is the fully-offline requirement made structural. -->
+	<!-- No ATS exceptions and no HTTP client: the app makes no HTTP requests
+	     of any kind. On iOS there is no permission that could be withheld to
+	     make one impossible, so the structural guarantee is the absence of
+	     the client plus OfflineGuard, which refuses any address outside the
+	     local ranges before a socket is opened. (Android is different: it does
+	     require the INTERNET permission just to create a socket, even a local
+	     one, so that declaration on Android is a precondition for the
+	     phone-to-phone link rather than a relaxation of this rule.) -->
 
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>

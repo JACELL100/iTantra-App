@@ -8,4 +8,8 @@
     <string name="service_channel_description">Keeps the voice link running while the screen is off.</string>
     <string name="service_title">Voice link active</string>
     <string name="service_text">Listening on this device only. Nothing is uploaded.</string>
+
+    <!-- The notification's Stop action. One word, because it is read under
+         stress and goes off with a single tap. -->
+    <string name="service_stop_action">Stop</string>
 </resources>

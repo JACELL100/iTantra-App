@@ -20,7 +20,7 @@ void main() {
     });
 
     test('rejects routable addresses', () {
-      // Belt and braces: the app also holds no INTERNET permission, so this
+      // Belt and braces: OfflineGuard runs before every connect call, so this
       // check exists to fail loudly during development rather than to be the
       // only line of defence.
       for (final String address in <String>[

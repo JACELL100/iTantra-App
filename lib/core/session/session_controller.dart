@@ -70,6 +70,26 @@ class SessionAlert extends SessionEvent {
   final AlertMessage alert;
 }
 
+/// The utterance closed but produced no text: silence, wind, or a door.
+///
+/// Distinct from an error, because the fix is different - speak louder or
+/// closer rather than install a pack or reconnect.
+class SessionNoSpeech extends SessionEvent {
+  const SessionNoSpeech();
+}
+
+/// Recognition is in flight.
+///
+/// Surfaced so the talk button can hold its "recognising" face while an
+/// utterance is being decoded. Without it the button snaps back to ready the
+/// instant the finger lifts, and a user whose sentence takes two seconds to
+/// transcribe has no idea whether it worked.
+class SessionBusy extends SessionEvent {
+  const SessionBusy(this.isRecognising);
+
+  final bool isRecognising;
+}
+
 /// Orchestrates the whole loop: microphone in, text out, text in, speech out.
 ///
 /// This is the only class that knows the order of operations, and it is
@@ -90,7 +110,9 @@ class SessionController {
     TtsEngine? tts,
     VadEngine? vad,
     EndpointController? endpointer,
-  })  : _capture = capture,
+    Future<void> Function(HandshakeMessage hello)? onHandshake,
+  })  : _onHandshake = onHandshake,
+        _capture = capture,
         _playback = playback,
         _pipeline = pipeline,
         _repository = repository,
@@ -116,6 +138,12 @@ class SessionController {
   final VadEngine _vad;
   final EndpointController _endpointer;
 
+  /// Pairing is owned by the launcher, not the session: the key exchange
+  /// finishes before there is a session to speak of. The session only routes
+  /// the frame to it, because the session already owns the single inbound
+  /// subscription.
+  final Future<void> Function(HandshakeMessage hello)? _onHandshake;
+
   final StreamController<SessionEvent> _events =
       StreamController<SessionEvent>.broadcast();
 
@@ -124,6 +152,12 @@ class SessionController {
 
   SessionMode _mode = SessionMode.pushToTalk;
   bool _talking = false;
+  bool _recognising = false;
+
+  /// True while an utterance is being decoded or sent. The UI uses this to keep
+  /// the talk button in its "recognising" state rather than dropping back to
+  /// ready the instant a finger lifts.
+  bool get isRecognising => _recognising;
 
   /// Recognition runs one utterance at a time. Two concurrent forward passes
   /// on a low-end CPU are slower than two sequential ones and can exhaust
@@ -214,6 +248,9 @@ class SessionController {
         messageId, Stage.a0SpeechEnd, utterance.monotonicSpeechEndMicros);
     _metrics.mark(messageId, Stage.a1Endpoint);
 
+    _recognising = true;
+    _events.add(const SessionBusy(true));
+
     final AsrResult result;
     try {
       result = await asr.transcribe(
@@ -223,13 +260,20 @@ class SessionController {
     } on AsrException catch (e) {
       _events.add(SessionError(e.message, isMissingModel: e.isMissingModel));
       return;
+    } finally {
+      _recognising = false;
+      _events.add(const SessionBusy(false));
     }
 
     _metrics.mark(messageId, Stage.a2AsrFinal);
 
     if (result.isEmpty) {
       // Silence, wind, or a door closing. Nothing is sent, because an empty
-      // message on the far end is noise, not information.
+      // message on the far end is noise, not information. A user who spoke and
+      // got nothing needs to be told, though, or they will assume the link is
+      // broken.
+      _metrics.increment('local_no_speech');
+      _events.add(const SessionNoSpeech());
       return;
     }
 
@@ -311,21 +355,28 @@ class SessionController {
 
   Future<void> _handleMessage(WireMessage message) async {
     switch (message) {
-      case TextMessage text:
+      case final TextMessage text:
         await _handleText(text);
-      case AlertMessage alert:
+      case final AlertMessage alert:
         await _handleAlert(alert);
-      case ReceiptMessage receipt:
+      case final ReceiptMessage receipt:
         _metrics.mark(receipt.acknowledgedId, Stage.a5Receipt);
         await _repository.updateState(
             receipt.acknowledgedId, DeliveryState.played);
         _events.add(SessionMessageUpdated(
             receipt.acknowledgedId, DeliveryState.played));
-      case FloorMessage floor:
+      case final FloorMessage floor:
         _handleFloor(floor);
-      case CapabilitiesMessage():
-        // Handled by the pairing flow, which owns capability state.
-        break;
+      case final CapabilitiesMessage caps:
+        // A capability refresh mid-session, which is what a peer sends after
+        // someone installs a pack. Recorded but not acted on yet.
+        _metrics.increment('capability_refreshes_received');
+        ItLog.i('session', 'peer can hear ${caps.ttsLanguages.length} languages');
+      case final HandshakeMessage handshake:
+        // Reached only when a peer re-handshakes on a live link, which is what
+        // happens after a reconnect. Routed rather than handled, so the key
+        // exchange stays in one place.
+        await _onHandshake?.call(handshake);
     }
   }
 
@@ -485,6 +536,20 @@ class SessionController {
     );
     await _repository.updateState(id, DeliveryState.sent);
     _events.add(SessionMessageUpdated(id, DeliveryState.sent));
+  }
+
+  /// Announces a message that something other than this phone's receive path
+  /// stored, so the UI can show it.
+  ///
+  /// The single-phone demonstration writes its incoming rows straight to the
+  /// repository, because there is no second device and therefore no second
+  /// SessionController to raise the event. Without this hook those rows exist
+  /// in the database and never appear on screen, which is precisely what made
+  /// the demonstration look broken: the sender pressed send, and nothing at all
+  /// came back.
+  void publishPeerStored(StoredMessage message) {
+    if (_events.isClosed) return;
+    _events.add(SessionMessageStored(message));
   }
 
   Future<void> dispose() async {

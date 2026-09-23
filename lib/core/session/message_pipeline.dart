@@ -68,13 +68,25 @@ class MessagePipeline {
 
   final Random _random = Random.secure();
 
-  /// Attaches keys after pairing completes. Until then the link is plaintext,
-  /// which is only ever the case for the loopback demo transport.
+  bool _inboundClosed = false;
+
+  /// Attaches keys after pairing completes. Until then the link is plaintext:
+  /// the two handshake frames are the only cleartext this protocol ever sends,
+  /// and they carry nothing but public keys and capability lists.
   void attachCrypto(SessionCrypto crypto) {
     _crypto = crypto;
   }
 
+  /// Drops the keys, e.g. when the user rejects the verification code. The
+  /// link stays usable so the handshake can be retried, but nothing sensitive
+  /// crosses it until keys exist again.
+  void detachCrypto() {
+    _crypto = null;
+  }
+
   bool get isEncrypted => _crypto != null;
+
+  bool get isClosed => _inboundClosed;
 
   /// 96 bits of randomness, base-36. Short enough to keep the frame small,
   /// wide enough that two phones never collide.
@@ -88,6 +100,7 @@ class MessagePipeline {
 
   Stream<Inbound> inbound() async* {
     await for (final Uint8List frame in _transport.inbound) {
+      if (_inboundClosed) return;
       final int receivedMicros = MetricsCollector.nowMicros();
 
       Uint8List payload = frame;
@@ -196,4 +209,10 @@ class MessagePipeline {
         op: op,
         waitMs: waitMs,
       ));
+
+  /// Tears down the receiving loop. Without this a pipeline left behind by a
+  /// disconnect keeps decoding frames from a closed socket.
+  Future<void> close() async {
+    _inboundClosed = true;
+  }
 }

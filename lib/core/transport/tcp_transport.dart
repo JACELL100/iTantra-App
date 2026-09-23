@@ -59,15 +59,17 @@ class TcpTransport implements TransportAdapter {
   final int port;
   final OfflineGuard _guard;
 
-  final StreamController<LinkState> _state =
-      StreamController<LinkState>.broadcast();
+  final LinkStateChannel _state = LinkStateChannel();
   final StreamController<Uint8List> _inbound =
       StreamController<Uint8List>.broadcast();
 
   ServerSocket? _server;
   Socket? _socket;
   StreamSubscription<Uint8List>? _socketSub;
-  late final FrameAccumulator _accumulator = FrameAccumulator(_onFrame);
+  late final FrameAccumulator _accumulator =
+      FrameAccumulator(onFrame: _onFrame);
+
+  void _onFrame(int version, Uint8List payload) => _deliver(payload);
 
   int _sent = 0;
   int _received = 0;
@@ -86,7 +88,10 @@ class TcpTransport implements TransportAdapter {
       );
 
   @override
-  Stream<LinkState> get state => _state.stream;
+  LinkState get state => _state.current;
+
+  @override
+  Stream<LinkState> get states => _state.stream;
 
   @override
   Stream<Uint8List> get inbound => _inbound.stream;
@@ -100,7 +105,7 @@ class TcpTransport implements TransportAdapter {
     try {
       if (role == TcpRole.client) {
         // Refuses anything that is not a local literal address.
-        _guard.requireLinkLocal(address);
+        OfflineGuard.requireLinkLocal(address, allowLoopback: _guard.allowLoopback);
         final Socket socket = await Socket.connect(
           address,
           port,
@@ -122,7 +127,8 @@ class TcpTransport implements TransportAdapter {
             socket.destroy();
             return;
           }
-          if (!_guard.isPermitted(socket.remoteAddress)) {
+          if (!OfflineGuard.isPermitted(socket.remoteAddress,
+              allowLoopback: _guard.allowLoopback)) {
             ItLog.w('tcp', 'rejecting non-local peer');
             socket.destroy();
             return;
@@ -163,7 +169,7 @@ class TcpTransport implements TransportAdapter {
     _state.add(LinkConnected('${socket.remoteAddress.address}:${socket.remotePort}'));
   }
 
-  void _onFrame(Uint8List payload) {
+  void _deliver(Uint8List payload) {
     _received++;
     if (!_inbound.isClosed) _inbound.add(payload);
   }

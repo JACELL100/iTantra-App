@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:onnxruntime/onnxruntime.dart';
@@ -7,17 +8,29 @@ import 'package:onnxruntime/onnxruntime.dart';
 import '../metrics/metrics.dart';
 import '../models/model_pack.dart';
 import '../models/model_pack_manager.dart';
+import '../models/onnx_runtime_host.dart';
 import '../util/log.dart';
 import 'phonemizer.dart';
 import 'text_frontend.dart';
 import 'tts_engine.dart';
 
 class _LoadedVoice {
-  _LoadedVoice(this.session, this.phonemizer, this.sampleRateHz);
+  _LoadedVoice({
+    required this.session,
+    required this.phonemizer,
+    required this.sampleRateHz,
+    required this.names,
+  });
 
   final OrtSession session;
   final Phonemizer phonemizer;
   final int sampleRateHz;
+
+  /// Tensor names from the pack manifest. A voice exported by somebody else
+  /// may call the token input `x` and the scales `speaking_rate`, and there is
+  /// no way to guess that at run time - so it is read from the manifest and
+  /// falls back to the exporter convention for packs built by ml/export.
+  final TensorNames names;
 
   void release() => session.release();
 }
@@ -48,8 +61,6 @@ class OnnxVitsTtsEngine implements TtsEngine {
   final TextFrontend _frontend = const TextFrontend();
   final LinkedHashMap<String, _LoadedVoice> _voices =
       LinkedHashMap<String, _LoadedVoice>();
-
-  bool _runtimeReady = false;
 
   /// Inference scales. These are the reference VITS values; lowering noise
   /// makes speech flatter but more predictable, which is what an alert wants
@@ -84,24 +95,35 @@ class OnnxVitsTtsEngine implements TtsEngine {
       );
     }
 
-    if (!_runtimeReady) {
-      OrtEnv.instance.init();
-      _runtimeReady = true;
-    }
+    // Refcounted, so an eviction here cannot pull the runtime out from under
+    // a live recognition session in the same process.
+    OnnxRuntimeHost.acquire();
 
     final OrtSessionOptions options = OrtSessionOptions()
       ..setIntraOpNumThreads(2)
       ..setInterOpNumThreads(1)
       ..setSessionGraphOptimizationLevel(GraphOptimizationLevel.ortEnableAll);
 
-    final _LoadedVoice voice = _LoadedVoice(
-      OrtSession.fromFile(pack.modelPath, options),
-      Phonemizer.load(
-        graphemesPath: pack.assetPath('graphemes.tsv'),
-        lexiconPath: pack.assetPath('lexicon.tsv'),
-      ),
-      pack.sampleRateHz ?? modelSampleRateHz,
-    );
+    final _LoadedVoice voice;
+    try {
+      voice = _LoadedVoice(
+        session: OrtSession.fromFile(File(pack.modelPath), options),
+        phonemizer: Phonemizer.load(
+          graphemesPath: pack.assetPath('graphemes.tsv'),
+          lexiconPath: pack.assetPath('lexicon.tsv'),
+        ),
+        sampleRateHz: pack.sampleRateHz ?? modelSampleRateHz,
+        names: pack.tensorNames,
+      );
+    } on Object catch (error) {
+      OnnxRuntimeHost.release();
+      throw TtsException(
+        'could not load the $languageTag voice: $error',
+        isMissingModel: true,
+      );
+    } finally {
+      options.release();
+    }
 
     _voices[languageTag] = voice;
     _metrics.increment('tts_sessions_created');
@@ -109,6 +131,7 @@ class OnnxVitsTtsEngine implements TtsEngine {
     while (_voices.length > maxCachedSessions) {
       final String oldest = _voices.keys.first;
       _voices.remove(oldest)?.release();
+      OnnxRuntimeHost.release();
       _metrics.increment('tts_sessions_evicted');
       ItLog.i('tts', 'evicted voice for $oldest');
     }
@@ -132,6 +155,7 @@ class OnnxVitsTtsEngine implements TtsEngine {
       final List<int> tokens = voice.phonemizer.encode(chunk.text);
       if (tokens.length <= 2) continue;
 
+      final TensorNames names = voice.names;
       final OrtValueTensor input = OrtValueTensor.createTensorWithDataList(
         Int64List.fromList(tokens),
         <int>[1, tokens.length],
@@ -153,17 +177,23 @@ class OnnxVitsTtsEngine implements TtsEngine {
       );
 
       List<OrtValue?>? outputs;
+      final OrtRunOptions runOptions = OrtRunOptions();
       try {
-        outputs = await voice.session.runAsync(
-          OrtRunOptions(),
+        final Future<List<OrtValue?>>? pending = voice.session.runAsync(
+          runOptions,
           <String, OrtValue>{
-            'input': input,
-            'input_lengths': lengths,
-            'scales': scales,
+            names.input: input,
+            if (names.length case final String name) name: lengths,
+            if (names.scales case final String name) name: scales,
           },
+          names.output == null ? null : <String>[names.output!],
         );
+        if (pending == null) {
+          throw const TtsException('the voice session is not usable');
+        }
+        outputs = await pending;
 
-        final Float64List audio = _flatten(outputs?.first?.value);
+        final Float64List audio = _flatten(outputs.isEmpty ? null : outputs.first?.value);
         if (audio.isEmpty) continue;
 
         final Int16List pcm = _toPcm16(audio);
@@ -176,6 +206,7 @@ class OnnxVitsTtsEngine implements TtsEngine {
           chunkIndex: chunk.index,
         );
       } finally {
+        runOptions.release();
         input.release();
         lengths.release();
         scales.release();
@@ -234,11 +265,8 @@ class OnnxVitsTtsEngine implements TtsEngine {
   Future<void> dispose() async {
     for (final _LoadedVoice voice in _voices.values) {
       voice.release();
+      OnnxRuntimeHost.release();
     }
     _voices.clear();
-    if (_runtimeReady) {
-      OrtEnv.instance.release();
-      _runtimeReady = false;
-    }
   }
 }

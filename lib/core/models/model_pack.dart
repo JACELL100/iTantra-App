@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart' as crypto;
@@ -17,6 +16,28 @@ enum PackRole {
       code == 'tts' ? PackRole.tts : PackRole.asr;
 }
 
+/// Where a pack came from. Shown in the UI because it is the difference
+/// between "a model we validated" and "a file somebody put on this phone",
+/// and the user is entitled to know which they are trusting.
+enum PackOrigin {
+  bundled('bundled', 'Ships with the app'),
+  downloaded('download', 'Downloaded'),
+  imported('import', 'Imported from a file'),
+  built('built', 'Built on this phone');
+
+  const PackOrigin(this.code, this.label);
+
+  final String code;
+  final String label;
+
+  static PackOrigin fromCode(String? code) {
+    for (final PackOrigin origin in PackOrigin.values) {
+      if (origin.code == code) return origin;
+    }
+    return PackOrigin.downloaded;
+  }
+}
+
 class ModelPackError implements Exception {
   const ModelPackError(this.message);
 
@@ -24,6 +45,64 @@ class ModelPackError implements Exception {
 
   @override
   String toString() => 'ModelPackError: $message';
+}
+
+/// Tensor names a pack's graph actually uses.
+///
+/// The exporter's names (`audio_signal`, `input_lengths`, ...) are only the
+/// convention. A model exported by somebody else - a Piper voice, an MMS-TTS
+/// graph, an export from the team's own tooling - may call the same tensors
+/// something else entirely, and ONNX Runtime has no way to guess. Recording the
+/// real names at install time is what lets an outside model run at all instead
+/// of failing with "invalid input name" the first time someone speaks.
+class TensorNames {
+  const TensorNames({
+    required this.input,
+    this.length,
+    this.scales,
+    this.output,
+  });
+
+  static const TensorNames asrDefaults = TensorNames(
+    input: 'audio_signal',
+    length: 'length',
+  );
+
+  static const TensorNames ttsDefaults = TensorNames(
+    input: 'input',
+    length: 'input_lengths',
+    scales: 'scales',
+    output: 'audio',
+  );
+
+  final String input;
+
+  /// Null when the graph takes a single input, which several exported VITS and
+  /// Whisper graphs do.
+  final String? length;
+  final String? scales;
+
+  /// Null means "whichever tensor the graph returns first".
+  final String? output;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'input': input,
+        if (length != null) 'length': length,
+        if (scales != null) 'scales': scales,
+        if (output != null) 'output': output,
+      };
+
+  static TensorNames? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final Object? input = raw['input'];
+    if (input is! String || input.isEmpty) return null;
+    return TensorNames(
+      input: input,
+      length: raw['length'] as String?,
+      scales: raw['scales'] as String?,
+      output: raw['output'] as String?,
+    );
+  }
 }
 
 /// One installed model pack: an ONNX graph plus its vocabulary.
@@ -48,6 +127,8 @@ class ModelPack {
     this.isRedistributable = true,
     this.sampleRateHz,
     this.notes,
+    this.origin = PackOrigin.downloaded,
+    this.names,
   });
 
   final String languageTag;
@@ -71,6 +152,17 @@ class ModelPack {
 
   final int? sampleRateHz;
   final String? notes;
+
+  /// How this pack got here.
+  final PackOrigin origin;
+
+  /// Tensor names declared by the pack. Null means the exporter convention,
+  /// which is what every pack built by ml/export uses.
+  final TensorNames? names;
+
+  /// The names to use when opening this graph.
+  TensorNames get tensorNames => names ??
+      (role == PackRole.asr ? TensorNames.asrDefaults : TensorNames.ttsDefaults);
 
   String get id => '$languageTag-${role.code}';
 
@@ -101,6 +193,8 @@ class ModelPack {
       isRedistributable: (json['redistributable'] as bool?) ?? true,
       sampleRateHz: json['sampleRateHz'] as int?,
       notes: json['notes'] as String?,
+      origin: PackOrigin.fromCode(json['origin'] as String?),
+      names: TensorNames.fromJson(json['tensors']),
     );
   }
 
@@ -112,8 +206,10 @@ class ModelPack {
         'licence': licence,
         'sourceUrl': sourceUrl,
         'redistributable': isRedistributable,
+        'origin': origin.code,
         if (sampleRateHz != null) 'sampleRateHz': sampleRateHz,
         if (notes != null) 'notes': notes,
+        if (names != null) 'tensors': names!.toJson(),
       };
 
   /// Verifies the model file against the manifest digest.
@@ -129,16 +225,10 @@ class ModelPack {
 
     // Streamed rather than read into memory: a 500 MB read would be fatal on
     // a 2 GB handset.
-    final AccumulatorSink<crypto.Digest> sink =
-        AccumulatorSink<crypto.Digest>();
-    final ByteConversionSink input =
-        crypto.sha256.startChunkedConversion(sink);
-    await for (final List<int> chunk in file.openRead()) {
-      input.add(chunk);
-    }
-    input.close();
+    final crypto.Digest actual =
+        await crypto.sha256.bind(file.openRead()).first;
 
-    return sink.events.single.toString() == digestHex.toLowerCase();
+    return actual.toString().toLowerCase() == digestHex.toLowerCase();
   }
 
   String describeSize() {

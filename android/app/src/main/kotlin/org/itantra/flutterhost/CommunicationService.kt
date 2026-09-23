@@ -81,6 +81,18 @@ class CommunicationService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
+        // A disclosure the user cannot act on is only half a disclosure. The
+        // Stop action finishes the activity, which tears the session down
+        // through the same path the in-app disconnect uses.
+        val stop = PendingIntent.getBroadcast(
+            this,
+            1,
+            Intent(this, SessionStopReceiver::class.java).apply {
+                action = SessionStopReceiver.ACTION_STOP_SESSION
+            },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
         } else {
@@ -91,9 +103,21 @@ class CommunicationService : Service() {
         return builder
             .setContentTitle(getString(R.string.service_title))
             .setContentText(getString(R.string.service_text))
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            // Our own monochrome glyph rather than a framework drawable: the
+            // status bar is where a user checks whether an app is listening to
+            // them, so it should show this app's mark and not a generic one
+            // that three other apps also use.
+            .setSmallIcon(R.drawable.ic_stat_itantra)
             .setContentIntent(open)
             .setOngoing(true)
+            // Deliberately the only action. The notification's job is to say
+            // "the microphone is live" and to offer a way out of that, not to
+            // become a control panel.
+            .addAction(
+                0,
+                getString(R.string.service_stop_action),
+                stop,
+            )
             .build()
     }
 

@@ -17,6 +17,16 @@ field use, not of what a development team owns.
 foreground-service semantics diverge enough that supporting it would mean a
 second audio path for a shrinking share of devices.
 
+## Actually tested
+
+| Device | SoC / RAM | OS | What was run | Result |
+| --- | --- | --- | --- | --- |
+| Samsung Galaxy A03s (`SM-A037F`), arm64 | Helio P35 class, 3-4 GB | Android 13 (API 33) | `flutter build apk --release` and `adb install`, then repeated cold launches with logcat captured | Launches and renders; no exceptions, no layout overflows. This is the low tier the app is designed for, which is why it is the device that was used |
+
+This is one device, and it is a *launch* result: no model packs exist yet, so
+no speech was recognised or synthesised. Everything in the budgets table below
+is still a target rather than a measurement, and is presented as such.
+
 ## Budgets on the low tier
 
 | Metric | Budget | Why |

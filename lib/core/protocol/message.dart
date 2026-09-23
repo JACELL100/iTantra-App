@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// Wire messages.
 ///
 /// The JSON keys are single letters. On a Bluetooth SPP link at a few
@@ -10,7 +12,8 @@ enum MessageKind {
   alert('a'),
   receipt('r'),
   floor('f'),
-  capabilities('c');
+  capabilities('c'),
+  handshake('h');
 
   const MessageKind(this.code);
 
@@ -253,6 +256,101 @@ class FloorMessage extends WireMessage {
             FloorOp.request,
         waitMs: json['w'] as int?,
       );
+}
+
+/// The key exchange, and the only message ever sent in the clear.
+///
+/// Two phones that have just met on an untrusted hotspot need to agree on a
+/// session key. X25519 over the link gives them that against a passive
+/// listener, but nothing at all against an attacker who sits in the middle and
+/// runs a separate handshake with each side. There is no certificate authority
+/// offline, so the defence has to be a human: both phones derive the same
+/// six-digit code from both public keys, and the users compare them out loud.
+///
+/// This message therefore carries the sender's ephemeral public key *and* its
+/// capabilities, so pairing costs one round trip rather than two. It is
+/// self-describing and small: a 32-byte key in base64 is 43 characters, and
+/// the whole frame is under 200 bytes.
+class HandshakeMessage extends WireMessage {
+  const HandshakeMessage({
+    required super.messageId,
+    required super.senderId,
+    required this.publicKey,
+    required this.role,
+    this.asrLanguages = const <String>[],
+    this.ttsLanguages = const <String>[],
+    this.appVersion = '0',
+    this.protocolVersion = ProtocolLimits.version,
+    this.displayName,
+  });
+
+  /// Raw 32-byte X25519 public key.
+  final List<int> publicKey;
+
+  /// 'a' for the side that dialled, 'b' for the side that listened. It decides
+  /// which direction uses which nonce prefix, so the two ends cannot collide.
+  final String role;
+
+  final List<String> asrLanguages;
+  final List<String> ttsLanguages;
+  final String appVersion;
+  final int protocolVersion;
+
+  /// Friendly name shown during verification, e.g. "Android · Ravi".
+  final String? displayName;
+
+  bool get isInitiator => role == 'a';
+
+  @override
+  MessageKind get kind => MessageKind.handshake;
+
+  @override
+  Map<String, Object?> toJson() => <String, Object?>{
+        't': kind.code,
+        'i': messageId,
+        's': senderId,
+        'k': base64Url.encode(publicKey),
+        'o': role,
+        'ar': asrLanguages,
+        'tr': ttsLanguages,
+        'av': appVersion,
+        'pv': protocolVersion,
+        if (displayName != null) 'n': displayName,
+      };
+
+  static HandshakeMessage fromJson(Map<String, Object?> json) {
+    final Object? key = json['k'];
+    if (key is! String) {
+      throw const FormatException('handshake has no public key');
+    }
+    final List<int> bytes;
+    try {
+      bytes = base64Url.decode(key);
+    } on FormatException {
+      throw const FormatException('handshake key is not valid base64url');
+    }
+    if (bytes.length != 32) {
+      throw const FormatException('handshake key is not 32 bytes');
+    }
+
+    final Object? role = json['o'];
+    return HandshakeMessage(
+      messageId: json['i']! as String,
+      senderId: json['s']! as String,
+      publicKey: bytes,
+      role: role is String && role == 'b' ? 'b' : 'a',
+      asrLanguages: _stringList(json['ar']),
+      ttsLanguages: _stringList(json['tr']),
+      appVersion: (json['av'] as String?) ?? '0',
+      protocolVersion: (json['pv'] as int?) ?? ProtocolLimits.version,
+      displayName: json['n'] as String?,
+    );
+  }
+
+  static List<String> _stringList(Object? raw) {
+    if (raw is! List) return const <String>[];
+    return raw.whereType<String>().toList(growable: false);
+  }
 }
 
 /// Exchanged once per link so each side knows which languages the other can

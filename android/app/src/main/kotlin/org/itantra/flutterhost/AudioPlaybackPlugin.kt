@@ -7,10 +7,14 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /**
  * Streaming PCM playback with audio focus.
@@ -33,6 +37,11 @@ class AudioPlaybackPlugin(
     private val audioManager =
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
+    /** Off the platform thread: draining polls, and polling on the UI thread
+     *  would freeze the app for the length of the sentence tail. */
+    private val io: ExecutorService = Executors.newSingleThreadExecutor()
+    private val main = Handler(Looper.getMainLooper())
+
     private var track: AudioTrack? = null
     private var focusRequest: AudioFocusRequest? = null
     private var sessionId: String? = null
@@ -47,6 +56,7 @@ class AudioPlaybackPlugin(
     fun detach() {
         releaseTrack()
         channel.setMethodCallHandler(null)
+        io.shutdown()
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -74,15 +84,26 @@ class AudioPlaybackPlugin(
                     // A late write from a session that was pre-empted. Dropped
                     // rather than played, or an interrupted message would
                     // resume behind the alert that replaced it.
-                    result.success(mapOf("audible" to false))
+                    result.success(mapOf("audible" to 0L))
                     return
                 }
                 result.success(mapOf("audible" to write(pcm, rate, last)))
             }
 
             "drain" -> {
-                drain()
-                result.success(null)
+                // Blocks until the buffer is empty, which is exactly what the
+                // microphone-reopen logic needs and exactly what must not
+                // happen on the main thread.
+                io.execute {
+                    try {
+                        drain()
+                    } finally {
+                        // The Flutter result may be invoked from any thread;
+                        // posting it back keeps the reply ordered after the
+                        // work rather than racing it.
+                        main.post { result.success(null) }
+                    }
+                }
             }
 
             "stop" -> {
@@ -206,7 +227,18 @@ class AudioPlaybackPlugin(
         return created
     }
 
-    private fun write(pcm: ByteArray, sampleRateHz: Int, last: Boolean): Boolean {
+    /**
+     * Writes one chunk and reports when sound actually started.
+     *
+     * Returns the monotonic microphone-timestamp equivalent - the moment the
+     * first samples were accepted by a track that is already playing - as
+     * **microseconds**, or `0` for every write after the first. It must be an
+     * integer: this value is the far end of the measured phone-to-phone
+     * latency, and Dart reads it as one. Returning a boolean here, as an
+     * earlier version did, made the Dart cast throw on the very first chunk of
+     * every message.
+     */
+    private fun write(pcm: ByteArray, sampleRateHz: Int, last: Boolean): Long {
         val output = ensureTrack(sampleRateHz)
         var offset = 0
         while (offset < pcm.size) {
@@ -215,26 +247,40 @@ class AudioPlaybackPlugin(
             offset += written
         }
 
-        val firstAudible = !reportedAudible
-        if (firstAudible) reportedAudible = true
-        if (last) drain()
-        return firstAudible
+        var audibleMicros = 0L
+        if (!reportedAudible) {
+            reportedAudible = true
+            audibleMicros = SystemClock.elapsedRealtimeNanos() / 1_000L
+        }
+        // The Dart controller issues its own drain after the chunk stream ends.
+        // Scheduling one here as well means the tail is still awaited if that
+        // call is ever missed, and because it runs on the io executor rather
+        // than the platform thread it cannot stall the UI. Two concurrent
+        // drains are harmless: both are only waiting for the same playback
+        // head position to catch up.
+        if (last) io.execute { drain() }
+        return audibleMicros
     }
 
     /** Blocks until the buffered audio has actually been rendered. */
     private fun drain() {
         val output = track ?: return
-        val frames = output.playbackHeadPosition
         // Poll rather than sleep on a computed duration: the head position is
         // ground truth, and a fixed sleep either truncates the tail of a word
         // or adds dead air.
         var stableFor = 0
-        var last = frames
-        while (stableFor < 3) {
-            SystemClock.sleep(20)
-            val now = output.playbackHeadPosition
-            if (now == last) stableFor++ else stableFor = 0
-            last = now
+        var previous = -1
+        try {
+            previous = output.playbackHeadPosition
+            while (stableFor < 3) {
+                SystemClock.sleep(20)
+                val now = output.playbackHeadPosition
+                if (now == previous) stableFor++ else stableFor = 0
+                previous = now
+            }
+        } catch (_: IllegalStateException) {
+            // The track was released under us - a stop arrived while draining.
+            // Nothing to wait for.
         }
     }
 

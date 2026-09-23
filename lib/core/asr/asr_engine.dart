@@ -8,6 +8,8 @@ class AsrResult {
     required this.languageTag,
     required this.audioMs,
     required this.computeMs,
+    this.isSimulated = false,
+    this.reportsConfidence = true,
   });
 
   final String text;
@@ -20,6 +22,18 @@ class AsrResult {
   final String languageTag;
   final int audioMs;
   final int computeMs;
+
+  /// True when the text did not come from listening to the audio at all.
+  ///
+  /// Only the demonstration engine sets this. It is carried all the way to the
+  /// screen because a transcript that looks like speech but was not recognised
+  /// from speech is the one thing in this app that could mislead somebody.
+  final bool isSimulated;
+
+  /// False when the engine has no confidence to report - a hosted endpoint
+  /// returns a transcript and nothing else. The UI must then stay silent about
+  /// confidence rather than reading 0 as "very unsure".
+  final bool reportsConfidence;
 
   /// Real-time factor: compute time over audio duration. Below 1.0 means
   /// faster than real time. This is a scored metric, so it is measured, not

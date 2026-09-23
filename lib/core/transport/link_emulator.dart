@@ -48,7 +48,10 @@ class LinkEmulator implements TransportAdapter {
       );
 
   @override
-  Stream<LinkState> get state => _inner.state;
+  LinkState get state => _inner.state;
+
+  @override
+  Stream<LinkState> get states => _inner.states;
 
   @override
   Stream<Uint8List> get inbound => _inner.inbound;

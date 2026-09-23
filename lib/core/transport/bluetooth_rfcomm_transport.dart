@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 
@@ -40,15 +39,16 @@ class BluetoothRfcommTransport implements TransportAdapter {
   final String? peerAddress;
   final String peerName;
 
-  final StreamController<LinkState> _state =
-      StreamController<LinkState>.broadcast();
+  final LinkStateChannel _state = LinkStateChannel();
   final StreamController<Uint8List> _inbound =
       StreamController<Uint8List>.broadcast();
 
-  late final FrameAccumulator _accumulator = FrameAccumulator((Uint8List f) {
-    _received++;
-    if (!_inbound.isClosed) _inbound.add(f);
-  });
+  late final FrameAccumulator _accumulator = FrameAccumulator(
+    onFrame: (int version, Uint8List frame) {
+      _received++;
+      if (!_inbound.isClosed) _inbound.add(frame);
+    },
+  );
 
   StreamSubscription<dynamic>? _sub;
   int _sent = 0;
@@ -66,7 +66,10 @@ class BluetoothRfcommTransport implements TransportAdapter {
       );
 
   @override
-  Stream<LinkState> get state => _state.stream;
+  LinkState get state => _state.current;
+
+  @override
+  Stream<LinkState> get states => _state.stream;
 
   @override
   Stream<Uint8List> get inbound => _inbound.stream;

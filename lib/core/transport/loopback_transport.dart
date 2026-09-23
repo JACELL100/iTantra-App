@@ -69,8 +69,7 @@ class LoopbackTransport implements TransportAdapter {
 
   late final LoopbackTransport _peer;
 
-  final StreamController<LinkState> _state =
-      StreamController<LinkState>.broadcast();
+  final LinkStateChannel _state = LinkStateChannel();
   final StreamController<Uint8List> _inbound =
       StreamController<Uint8List>.broadcast();
 
@@ -90,7 +89,10 @@ class LoopbackTransport implements TransportAdapter {
       );
 
   @override
-  Stream<LinkState> get state => _state.stream;
+  LinkState get state => _state.current;
+
+  @override
+  Stream<LinkState> get states => _state.stream;
 
   @override
   Stream<Uint8List> get inbound => _inbound.stream;

@@ -34,7 +34,7 @@ class Resampler {
   /// output rate.
   static double _coefficientFor(int rateHz) {
     const double cutoffHz = 7000;
-    final double rc = 1.0 / (2 * 3.141592653589793 * cutoffHz);
+    const double rc = 1.0 / (2 * 3.141592653589793 * cutoffHz);
     final double dt = 1.0 / rateHz;
     return dt / (rc + dt);
   }

@@ -52,10 +52,13 @@ class BleBridgeTransport implements TransportAdapter {
   final StreamController<Uint8List> _inbound =
       StreamController<Uint8List>.broadcast();
 
-  late final FrameAccumulator _accumulator = FrameAccumulator((Uint8List f) {
-    _received++;
-    if (!_inbound.isClosed) _inbound.add(f);
-  });
+  late final FrameAccumulator _accumulator = FrameAccumulator(
+    (version, payload) {}, // Primary callback (required)
+    onFrameOnly: (Uint8List f) {
+      _received++;
+      if (!_inbound.isClosed) _inbound.add(f);
+    },
+  );
 
   StreamSubscription<Uint8List>? _sub;
   Future<void> _writeChain = Future<void>.value();

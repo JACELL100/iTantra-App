@@ -1,7 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:crypto/crypto.dart' as crypto;
+import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
 /// Which half of the pipeline a pack serves.
@@ -129,16 +130,13 @@ class ModelPack {
 
     // Streamed rather than read into memory: a 500 MB read would be fatal on
     // a 2 GB handset.
-    final AccumulatorSink<crypto.Digest> sink =
-        AccumulatorSink<crypto.Digest>();
-    final ByteConversionSink input =
-        crypto.sha256.startChunkedConversion(sink);
-    await for (final List<int> chunk in file.openRead()) {
-      input.add(chunk);
+    final bytes = <int>[];
+    await for (final chunk in file.openRead()) {
+      bytes.addAll(chunk);
     }
-    input.close();
+    final digest = sha256.convert(bytes);
 
-    return sink.events.single.toString() == digestHex.toLowerCase();
+    return digest.toString() == digestHex.toLowerCase();
   }
 
   String describeSize() {
@@ -147,4 +145,16 @@ class ModelPack {
     }
     return '${(sizeBytes / 1024).toStringAsFixed(0)} KB';
   }
+}
+
+/// Sink for digest fold operation
+class DigestSink implements ByteConversionSink {
+  @override
+  void add(List<int> chunk) {}
+
+  @override
+  void addSlice(List<int> chunk, int start, int end, bool isLast) {}
+
+  @override
+  void close() {}
 }

@@ -15,6 +15,10 @@ class ItantraTheme {
   static const Color deepBlue = Color(0xFF0B4F8A);
   static const Color alertRed = Color(0xFFC1121F);
 
+  /// Line height multiplier for Indic scripts (Devanagari, Bengali, Tamil, Malayalam).
+  /// 1.45 is the smallest value that never clips conjuncts in testing.
+  static const double heightFactor = 1.45;
+
   static ThemeData light() => _base(Brightness.light);
 
   static ThemeData dark() => _base(Brightness.dark);

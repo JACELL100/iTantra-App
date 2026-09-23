@@ -54,13 +54,20 @@ class FramingException implements Exception {
 /// loop turn in between. On the receive path that ordering guarantee matters
 /// more than composability.
 class FrameAccumulator {
-  FrameAccumulator({
-    required this.onFrame,
+  FrameAccumulator(
+    void Function(int version, Uint8List payload) onFrame, {
     this.onError,
+    this.onFrameOnly,
     this.maxPayloadBytes = Framing.maxPayloadBytes,
-  });
+  }) : _onFrame = onFrame;
 
-  final void Function(int version, Uint8List payload) onFrame;
+  /// Callback receives (version, payload). Version is typically 1.
+  /// For backward compatibility, also accepts callbacks that only take payload.
+  final void Function(int version, Uint8List payload) _onFrame;
+
+  /// Optional callback that only receives payload (no version).
+  final void Function(Uint8List)? onFrameOnly;
+
   final void Function(String message)? onError;
   final int maxPayloadBytes;
 
@@ -113,7 +120,10 @@ class FrameAccumulator {
         offset + Framing.headerSize,
         offset + Framing.headerSize + length,
       );
-      onFrame(version, Uint8List.fromList(payload));
+      // Call the primary callback with version
+      _onFrame(version, Uint8List.fromList(payload));
+      // Also call the optional payload-only callback if set
+      onFrameOnly?.call(Uint8List.fromList(payload));
       offset += Framing.headerSize + length;
     }
 

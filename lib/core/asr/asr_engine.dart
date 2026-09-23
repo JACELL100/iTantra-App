@@ -8,6 +8,8 @@ class AsrResult {
     required this.languageTag,
     required this.audioMs,
     required this.computeMs,
+    this.translatedText,
+    this.targetLanguageTag,
   });
 
   final String text;
@@ -21,12 +23,20 @@ class AsrResult {
   final int audioMs;
   final int computeMs;
 
+  /// Optional translation (when ASR engine supports it, e.g., Gemma 4 E2B).
+  final String? translatedText;
+
+  /// Target language for translation (if translatedText is present).
+  final String? targetLanguageTag;
+
   /// Real-time factor: compute time over audio duration. Below 1.0 means
   /// faster than real time. This is a scored metric, so it is measured, not
   /// estimated.
   double get realTimeFactor => audioMs == 0 ? 0 : computeMs / audioMs;
 
   bool get isEmpty => text.trim().isEmpty;
+
+  bool get hasTranslation => translatedText != null && translatedText!.isNotEmpty;
 
   static const AsrResult empty = AsrResult(
     text: '',
@@ -63,9 +73,11 @@ abstract class AsrEngine {
   Set<String> get availableLanguages;
 
   /// Transcribes 16 kHz mono PCM.
+  /// Optionally translates to targetLanguageTag if supported.
   Future<AsrResult> transcribe({
     required Int16List pcm,
     required String languageTag,
+    String? targetLanguageTag,
   });
 
   /// Loads a model ahead of first use, so the first message of a session does

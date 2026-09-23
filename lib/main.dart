@@ -27,8 +27,8 @@ Future<void> main() async {
           details.stack);
     };
 
-    final ServiceLocator locator = await ServiceLocator.bootstrap();
-    runApp(ItantraApp(locator: locator));
+    await ServiceLocator.bootstrap();
+    runApp(const ItantraApp());
   }, (Object error, StackTrace stack) {
     // A crash here must not be silent: on a distress device, an app that
     // quietly died looks identical to an app that is listening.

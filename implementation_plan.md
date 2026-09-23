@@ -1,4 +1,4 @@
-# iTantra — Detailed Implementation Plan
+﻿# iTantra â€” Detailed Implementation Plan
 
 **SIH Problem Statement:** 26173  
 **Organization:** Indian Space Research Organisation (ISRO), Department of Space  
@@ -7,7 +7,7 @@
 **Prepared:** 9 September 2026  
 **Status:** Proposed engineering plan; not a claim of an implemented or benchmarked system.
 
-> Build an offline Android speech-to-text → authenticated low-bitrate text transport → text-to-speech communication system for Hindi, Gujarati, Marathi, Kannada, Malayalam, Tamil, Telugu, Odia, Bengali, and English. Prioritize preservation of meaning, native-listener intelligibility, and measured operation on inexpensive phones over impressive but unverified model claims.
+> Build an offline Android speech-to-text â†’ authenticated low-bitrate text transport â†’ text-to-speech communication system for Hindi, Gujarati, Marathi, Kannada, Malayalam, Tamil, Telugu, Odia, Bengali, and English. Prioritize preservation of meaning, native-listener intelligibility, and measured operation on inexpensive phones over impressive but unverified model claims.
 
 ## Contents
 
@@ -51,8 +51,9 @@
 - Use **native Kotlin Android**, coroutines, a small Compose UI, and a lifecycle-owned communication service.
 - Start with **phone-to-phone Bluetooth Classic RFCOMM** and **local Wi-Fi TCP**. Add Wi-Fi Direct discovery and an embedded BLE/Wi-Fi bridge behind a common transport interface.
 - Run all speech inference on the phones. Treat the embedded board as a **byte relay**, not as a ten-language ASR/TTS inference target.
-- Use an **open-source CPU inference path** as the compatibility baseline. Evaluate ONNX Runtime directly, sherpa-onnx for supported architectures, or whisper.cpp for supported Whisper checkpoints. Export success is a gate, not an assumption.
-- Default to **explicit language selection** and one active ASR pack plus one active TTS pack. Permit all ten packs to be stored offline, but never load all ten into RAM.
+- **Primary ASR engine: Gemma 4 E2B-it via LiteRT-LM** (2.58 GB `.litertlm` pack, Apache-2.0). Native audio input handles transcription and translation for all 10+ languages including code-switched Hindiâ€“English. **Fallback ASR: per-language ONNX CTC packs** (IndicConformer) for devices with <6 GB RAM or where Gemma latency exceeds budget.
+- TTS remains **DhVaani / IndicF5** (ASR is replaced; TTS is unchanged).
+- Default to **explicit language selection** and one active ASR pack plus one active TTS pack. Permit all packs to be stored offline, but never load all into RAM.
 - Ship final, immutable speech segments across the low-rate link. Local partial transcripts may update freely; remote playback must never speak unstable hypotheses.
 - First establish an arbitrary-speech two-phone loop in English and Hindi, but place **Odia and low-end device feasibility in the first week**, not at the end.
 - Treat ten-language lightweight neural speech as a gated engineering/research problem. A prototype with only selected languages or robotic fallback voices is useful progress, **not full compliance**.
@@ -60,21 +61,21 @@
 ### 1.2 Important truths to preserve in the submission
 
 1. **This is semantic speech transport, not a waveform-preserving codec.** Speaker identity, emotion, background sounds, laughter, and nonverbal distress can be lost. An ASR error can change meaning.
-2. **“Fully offline” does not mean removing Android's INTERNET permission.** Local Wi-Fi sockets require it; internet access is not required. Demonstrate no cloud dependency using isolation and traffic evidence. [S8]
-3. **A normal Android app cannot guarantee physically maximum, globally non-interruptible sound.** Audio focus, calls, DND policy, routing, volume controls, hardware, and force-stop remain under OS/user control. Define non-interruptibility inside the app, document system limits, and seek written organizer acceptance. [S6–S7]
-4. **Multilingual does not mean every requested language is supported.** Standard Whisper's language mapping includes the eight requested Indic languages other than Odia plus English; it does not provide a standard Odia language token. IndicConformer lists the nine required Indic languages but not English. [S1–S2]
-5. **Model weights, engine code, phonemizers, datasets, and reference voices have separate licenses.** Downloadable or noncommercial weights are not automatically acceptable under a strict open-source-only rule. [S3–S5]
-6. **Quantizing a large model does not magically make it tiny.** A 600-million-parameter model requires approximately 600 MB just for one byte per parameter, before activations, buffers, decoder, and runtime. Parameter removal, distillation, smaller checkpoints, or specialized packs may be necessary.
-7. **Streaming audio into an offline model is not true streaming inference.** Overlapping-window recognition is a separate strategy with repeated computation and reconciliation costs.
-8. **“Phone-like” operation has unavoidable buffering.** Text recognition and speech regeneration cannot be assumed to match direct audio-call latency or reproduce simultaneous speakers faithfully.
+2. **"Fully offline" does not mean removing Android's INTERNET permission.** Local Wi-Fi sockets require it; internet access is not required. Demonstrate no cloud dependency using isolation and traffic evidence. [S8]
+3. **A normal Android app cannot guarantee physically maximum, globally non-interruptible sound.** Audio focus, calls, DND policy, routing, volume controls, hardware, and force-stop remain under OS/user control. Define non-interruptibility inside the app, document system limits, and seek written organizer acceptance. [S6â€“S7]
+4. **Multilingual does not mean every requested language is supported equally.** Gemma 4 covers 140+ languages for text and native audio input for transcription/translation; validate per-language quality in Phase 0 before claiming coverage.
+5. **Model weights, engine code, phonemizers, datasets, and reference voices have separate licenses.** Gemma 4 is Apache-2.0 (clean redistribution); DhVaani is Apache-2.0; eSpeak NG is GPL-3.0 (build-time only). Downloadable or noncommercial weights are not automatically acceptable under a strict open-source-only rule. [S3â€“S5]
+6. **Quantizing a large model does not magically make it tiny.** Gemma 4 E2B is 2.58 GB on disk, ~1.1 GB resident RAM on mobile. Keep ONNX CTC packs as fallback for <6 GB devices.
+7. **Streaming audio into an offline model is not true streaming inference.** Gemma 4 is autoregressive: it emits full tokens after end-of-speech, not CTC-style partial hypotheses. Latency metric shifts from "ASR RTF" to "time-to-first-token + tokens/s."
+8. **"Phone-like" operation has unavoidable buffering.** Text recognition and speech regeneration cannot be assumed to match direct audio-call latency or reproduce simultaneous speakers faithfully.
 9. The provided evaluation weights are efficiency 20%, accuracy 40%, and latency 20%: **80% total**. Do not invent the missing 20% or normalize the rubric without organizer clarification.
 
 ### 1.3 Assumptions requiring confirmation
 
 - Proposed support baseline: Android 8.0 / API 26 and above, primarily ARM64; actual device list determines whether 32-bit ARM support is required.
-- Low-end baseline: an actual 2–3 GB RAM ARM64 phone; mid-range baseline: an actual 4–6 GB device. These are team planning categories, not organizer specifications.
+- Low-end baseline: an actual 2â€“3 GB RAM ARM64 phone (uses ONNX CTC fallback); mid-range baseline: 4â€“6 GB device (may run Gemma with thermal throttling); high-end baseline: 6 GB+ phone (Gemma primary). These are team planning categories, not organizer specifications.
 - General speech is required, not only a fixed emergency phrasebook.
-- Same-language transmission is required; translation is not assumed.
+- Same-language transmission is required; **cross-language translation is a free add-on with Gemma 4 E2B** (sender-side translation, both strings sent).
 - Models may be installed from an offline pack before operation.
 - Training and developer model acquisition can happen before the demo; runtime has no server dependency.
 - Six-person team and a twelve-week runway are assumed for the full plan. A shorter sprint plan is included, but cannot guarantee new ten-language model training.
@@ -85,8 +86,8 @@
 
 | ID | Requirement | Implementation owner/subsystem | Acceptance evidence |
 |---|---|---|---|
-| R01 | Android app on low/mid-range phones | Android + optimization | Signed APK installed and sustained on documented physical devices |
-| R02 | Offline STT for ten languages | ASR | Unseen native-speaker recordings and live microphone transcripts per language |
+| R01 | Android app on low/mid/high-range phones | Android + optimization | Signed APK installed and sustained on documented physical devices |
+| R02 | Offline STT for ten languages | ASR (Gemma 4 E2B primary, ONNX CTC fallback) | Unseen native-speaker recordings and live microphone transcripts per language; Phase 0 validation table |
 | R03 | Offline TTS for ten languages | TTS | Arbitrary unseen text spoken and scored by native listeners per language |
 | R04 | Pause/stoppage sentence formation | VAD + segmenter | Boundary precision, missed syllables, finalization delay, pause test suite |
 | R05 | Immediate efficient text transmission | Session + protocol | Packet capture and timestamped final-segment transmission |
@@ -99,10 +100,11 @@
 | R12 | Small model/app/RAM footprint | Packaging + profiling | APK bytes, installed pack bytes, peak PSS, native allocations |
 | R13 | Low idle-listening CPU | VAD/service | Silence, noise, disconnected, and connected-idle measurements |
 | R14 | Low WER, intelligible flowing TTS | Evaluation | Raw and normalized WER/CER, comprehension, MOS, critical-entity results |
-| R15 | Low latency and favorable RTF | Instrumentation | Stage-level p50/p95, cold/warm, per language/device |
+| R15 | Low latency and favorable RTF | Instrumentation | Stage-level p50/p95, cold/warm, per language/device; **Gemma: TTFT + tokens/s** |
 | R16 | Open-source voice pipeline | Compliance | SBOM, licenses, model provenance, reproducible builds |
 | R17 | No internet-hosted inference | Offline QA | Airplane mode with local radios re-enabled; WAN-blocked operation |
 | R18 | Robust deployable architecture | Reliability + release | Reconnection, deduplication, crash recovery, corruption handling, install guide |
+| R19 | Cross-language walkie-talkie | ASR (Gemma) + protocol | Sender translates, sends src_lang + tgt_lang + both texts; receiver TTS speaks tgt_lang |
 
 **Traceability rule:** Every release test and backlog issue references one or more requirement IDs. Acceptance means recorded evidence, not merely an enabled button or a language name in settings.
 
@@ -144,6 +146,13 @@
 - Speakerphone mode requires echo handling and clear turn-taking behavior.
 - If safe full-duplex capture is not achieved, label the implementation **automatic half-duplex**, not a completed full-duplex phone mode.
 
+**Cross-language walkie-talkie (Gemma 4 E2B add-on)**
+
+- Sender selects source language (detected or explicit) and target language.
+- Gemma 4 transcribes and translates in one pass; sender transmits both `text` (source) and `translated_text` (target) with `src_lang` and `tgt_lang`.
+- Receiver uses `tgt_lang` to select TTS voice and speaks the translation.
+- Falls back to same-language mode if receiver lacks target TTS pack.
+
 **Alert message**
 
 - User deliberately invokes an SOS/alert action, selects or speaks content, and confirms as appropriate.
@@ -153,7 +162,7 @@
 
 ### 3.2 Not in the baseline
 
-- Translation, identity-preserving voice cloning, emotion preservation, speaker diarization, cloud relay, cellular telephony, internet accounts, map services, unlimited mesh routing, and custom RF physical-layer design.
+- Identity-preserving voice cloning, emotion preservation, speaker diarization, cloud relay, cellular telephony, internet accounts, map services, unlimited mesh routing, and custom RF physical-layer design.
 - Raw audio fallback as the normal transport. If later added, label it a separate optional mode and obtain organizer approval.
 - Clinical, aviation, maritime, disaster-response, or safety certification.
 
@@ -170,25 +179,23 @@ PHONE A                                                      PHONE B
 Microphone                                                   Speaker / headset
    |                                                              ^
 AudioRecord -> capture ring -> DSP -> VAD                            |
-                                  |                                AudioTrack
-                            segment controller                         ^
-                                  |                                    |
-                      offline ASR adapter                         PCM buffering
-                                  |                                    ^
-                    immutable transcript commit                  offline TTS
-                                  |                                    ^
-             language + safety metadata + message ID               normalizer
-                                  |                                    ^
-                    durable outbox + priorities                priority inbox
-                                  |                                    ^
-                 encode -> encrypt/authenticate              verify -> deduplicate
-                                  |                                    ^
-                       framed transport ======================= framed transport
-                          BT / local Wi-Fi / bridge
+                  |                                AudioTrack
+           endpoint controller                         ^
+                  |                                    |
+            ASR Engine (Gemma 4 E2B / ONNX CTC)        PCM buffering
+                  |                                    ^
+      language + translation + safety metadata + message ID   normalizer
+                  |                                    ^
+      durable outbox + priorities                    priority inbox
+                  |                                    ^
+         encode -> encrypt/authenticate             verify -> deduplicate
+                  |                                    ^
+       framed transport ======================= framed transport
+          BT / local Wi-Fi / bridge
+```
 
 Both phones can run both sides, governed by session, floor, audio-focus,
 model-residency, thermal, and backpressure controllers.
-```
 
 ### 4.1 Component responsibilities
 
@@ -196,12 +203,12 @@ model-residency, thermal, and backpressure controllers.
 - `CaptureEngine`: microphone ownership, frame timestamps, sample-rate conversion, bounded ring buffer.
 - `VadEngine`: speech probability or decisions only; no transcription responsibility.
 - `EndpointController`: pause timers, minimum duration, pre-roll, forced segmentation, PTT release.
-- `AsrEngine`: model loading, features, decoding, partial/final events, cancellation.
-- `TranscriptCommitter`: immutable segment IDs, normalization policy, confidence annotations.
+- `AsrEngine`: **two implementations behind the same interface** â€” `GemmaAsrEngine` (LiteRT-LM, primary on 6 GB+) and `OnnxCtcAsrEngine` (fallback). Model loading, features, decoding, partial/final events, cancellation.
+- `TranscriptCommitter`: immutable segment IDs, normalization policy, confidence annotations, translation metadata.
 - `MessageStore`: transactional outbox/inbox and delivery states.
 - `ProtocolCodec`: bounded binary encode/decode, version negotiation, authenticated envelope.
 - `TransportAdapter`: byte movement, peer discovery/connect, MTU and link statistics.
-- `TtsEngine`: pack-specific text frontend and synthesis.
+- `TtsEngine`: pack-specific text frontend and synthesis (DhVaani / IndicF5 unchanged).
 - `PlaybackController`: audio focus, routing, playback queues and underrun handling.
 - `AlertController`: authorization, priority, freshness, volume consent, acknowledgment.
 - `ModelPackManager`: import, validation, activation, eviction, rollback.
@@ -246,11 +253,14 @@ Use explicit buffer ownership. Avoid one heap allocation per audio frame. Cancel
 | Capture/playback | AudioRecord / AudioTrack | Direct control over PCM, buffering, route, timing |
 | Local database | Room/SQLite | Persist outbox before acknowledging durable receipt |
 | Small settings | DataStore | Model selection, accessibility, consent settings |
-| ASR/TTS runtime | ONNX Runtime CPU; sherpa-onnx when compatible | Select after exact model export and mobile tests |
+| **ASR runtime (primary)** | **LiteRT-LM (Gemma 4 E2B-it)** | **Native audio input, transcription + translation, Apache-2.0** |
+| ASR runtime (fallback) | ONNX Runtime CPU; sherpa-onnx when compatible | Per-language CTC packs for <6 GB devices |
+| TTS runtime | ONNX Runtime CPU (VITS) | DhVaani / IndicF5 unchanged |
 | Whisper baseline | whisper.cpp through JNI, if chosen | Not the Odia solution and not inherently true streaming |
 | VAD | Open-source WebRTC VAD or Silero VAD | Pin exact implementation/license and benchmark |
 | Training/export | PyTorch + model-native training code | Developer workstation only; not an Android Python runtime |
 | Alternative edge runtime | ExecuTorch or TensorFlow Lite/LiteRT | Use only when export and operators are proven |
+| **Flutter binding for Gemma** | **flutter_gemma (community)** | **Officially pointed by LiteRT-LM for Flutter; Android + iOS** |
 | Wi-Fi | Local TCP + native discovery/P2P APIs | No Google Nearby dependency |
 | Bluetooth phones | Native RFCOMM | Connection and permission UX required |
 | Embedded Bluetooth | BLE GATT | Different framing/MTU behavior from RFCOMM |
@@ -268,6 +278,9 @@ Use explicit buffer ownership. Avoid one heap allocation per audio frame. Cancel
 - CPU inference is the reference. Treat GPU/NPU delegates as optional measured accelerators, not required functionality or a loophole around the open-source requirement.
 - Do not call Android SpeechRecognizer or the device's default TextToSpeech provider as the compliant speech engine. Their installed implementation, licensing, language availability, and offline behavior are not controlled by this app.
 - No Google Nearby Connections, proprietary wake-word SDK, cloud analytics, cloud crash reporting, or hosted inference in the compliance build.
+- **Gemma 4 E2B selection**: probe free RAM and GPU delegate availability via `platform_info` capability probe. Use Gemma on 6 GB+ devices; fall back to ONNX CTC on lower-RAM devices. No inline `Platform.isIOS` checks â€” Dart asks `platform_info` what the host can actually do.
+- **flutter_gemma** is the community Flutter binding that LiteRT-LM officially points Flutter developers at; `flutter_gemma_mediapipe` is the opt-in engine package for `.task` models. Supports Android and iOS.
+- **LiteRT-LM Swift API** is early preview; Dart call sites stay shared via flutter_gemma; declared iOS limits (RFCOMM, volume) are untouched by this change.
 
 ### 5.3 Dependency acceptance checklist
 
@@ -283,58 +296,61 @@ If eSpeak NG is linked or shipped, comply with its GPL obligations and obtain a 
 
 Maintain a machine-readable ledger from day one. The initial rows below identify **research routes**, not validated production models.
 
-| Language | App tag | ASR route to test | TTS route to test | Required native-language tests |
-|---|---|---|---|---|
-| Hindi | hi-IN | Small IndicConformer-family checkpoint; Whisper baseline | Compact licensed neural voice; DhVaani export | Schwa, digits, negation, Hindi-English names |
-| Gujarati | gu-IN | Small Indic-family checkpoint; Whisper baseline | Compact trained/verified voice; DhVaani export | Script frontend, loanwords, names |
-| Marathi | mr-IN | Small Indic-family checkpoint; Whisper baseline | Compact trained/verified voice; DhVaani export | Conjuncts, morphology, place names |
-| Kannada | kn-IN | Small Indic-family checkpoint; Whisper baseline | Compact trained/verified voice; DhVaani export | Gemination, suffixes, numbers |
-| Malayalam | ml-IN | Small Indic-family checkpoint; Whisper baseline | Compact trained/verified voice; DhVaani export | Long compounds, chillus, segmentation |
-| Tamil | ta-IN | Small Indic-family checkpoint; Whisper baseline | Compact trained/verified voice; DhVaani export | Colloquial speech, names, pronunciation |
-| Telugu | te-IN | Small Indic-family checkpoint; Whisper baseline | Compact trained/verified voice; DhVaani export | Vowel length, gemination, suffixes |
-| Odia | or-IN | Explicit Odia-capable Indic checkpoint/student | Compact trained/verified voice; DhVaani export | Odia script, dialect coverage, model code mapping |
-| Bengali | bn-IN | Small Indic-family checkpoint; Whisper baseline | Compact trained/verified voice; DhVaani export | Conjuncts, numbers, regional accent |
-| English | en-IN | Small English ASR or Whisper baseline | Verified English compact neural voice; DhVaani export | Indian accents, abbreviations, mixed names |
+| Language | App tag | ASR route (Gemma 4 E2B primary) | Fallback ASR (ONNX CTC) | TTS route | Required native-language tests |
+|---|---|---|---|---|---|
+| Hindi | hi-IN | Gemma 4 E2B native audio | IndicConformer | DhVaani | Schwa, digits, negation, Hindi-English names |
+| Gujarati | gu-IN | Gemma 4 E2B native audio | IndicConformer | DhVaani | Script frontend, loanwords, names |
+| Marathi | mr-IN | Gemma 4 E2B native audio | IndicConformer | DhVaani | Conjuncts, morphology, place names |
+| Kannada | kn-IN | Gemma 4 E2B native audio | IndicConformer | DhVaani | Gemination, suffixes, numbers |
+| Malayalam | ml-IN | Gemma 4 E2B native audio | IndicConformer | DhVaani | Long compounds, chillus, segmentation |
+| Tamil | ta-IN | Gemma 4 E2B native audio | IndicConformer | DhVaani | Colloquial speech, names, pronunciation |
+| Telugu | te-IN | Gemma 4 E2B native audio | IndicConformer | DhVaani | Vowel length, gemination, suffixes |
+| Odia | or-IN | Gemma 4 E2B native audio | Explicit Odia checkpoint | DhVaani | Odia script, dialect coverage, model code mapping |
+| Bengali | bn-IN | Gemma 4 E2B native audio | IndicConformer | DhVaani | Conjuncts, numbers, regional accent |
+| English | en-IN | Gemma 4 E2B native audio | Whisper-small.en / Conformer EN | VITS / Piper / DhVaani | Indian accents, abbreviations, mixed names |
 
 Use app BCP-47 tags independently of model IDs. For example, `or-IN` can map to model-specific `or` or `ory`; do not substitute Bengali or Assamese as an Odia fallback.
 
 Ledger fields: source revision, task, language tags, code license, weight license, pack bytes, PSS, input/output rates, tokenizer hash, frontend hash, quantization, native runtime, export status, language QA status, and benchmark report path. Initial benchmark values must be `null`/`not_measured`, never invented zeroes.
 
+**Gemma 4 E2B validation note:** Phase 0 requires installing Google AI Edge Gallery from Play Store, opening Audio Scribe, and transcribing/translating recorded clips in all 10 target languages, especially noisy and code-switched speech. Deliverable: go/no-go table of per-language quality. Don't skip this â€” audio-language coverage is narrower than the 140-language text claim.
+
 ### 6.2 ASR candidate lanes
 
-**Lane A — Fast engineering baseline**
+**Lane A â€” Gemma 4 E2B-it via LiteRT-LM (Primary)**
 
-- Evaluate small multilingual Whisper models through a native runtime for the supported subset.
-- Include only the multilingual checkpoint when testing Indic languages; an English-only `.en` checkpoint is not multilingual.
-- Treat repeated-window transcription as chunked offline ASR; measure its repeated-compute cost.
-- Do not make ten-language coverage claims based on Whisper's general multilingual marketing. Odia requires a separately proven route. [S2]
+- Single 2.58 GB `.litertlm` pack replaces all per-language ASR packs. Apache-2.0 license.
+- Native audio input: accepts 16 kHz PCM frames directly, max 30 seconds per segment (aligns with VAD/endpointing chunks).
+- Transcription + translation in one pass: 140+ languages for text, cross-lingual audio encoder handles Hindiâ€“English code-switching natively (Devanagari stays Devanagari mid-utterance).
+- Fully on-device: Google's Audio Scribe in AI Edge Gallery and Gemma Translator reference project prove offline operation via LiteRT-LM.
+- RAM: ~1.1 GB resident on mobile config; 676 MBâ€“1.7 GB peak measured. Comfortable on 6 GB+ phones, tight below that.
+- Latency profile: autoregressive, not CTC streaming. ~0.3 s time-to-first-token on GPU, 25â€“56 tokens/s decode. No partial hypotheses â€” final text emitted after end-of-speech.
 
-**Lane B — Indic-specific deployment path**
+**Lane B â€” ONNX CTC Per-Language Packs (Fallback)**
 
-- Inspect exact language-specific IndicConformer checkpoints, their actual sizes, licenses, tokenizer assets, and decoder/export recipes.
-- Compare a smaller language-specific model with the multilingual teacher on native data.
-- Benchmark greedy CTC before deploying RNNT beam search on the smallest phone.
-- Preserve model-native feature extraction and decoding; porting mismatches can destroy accuracy.
-- The documented 600M multilingual model is a reference/teacher or high-resource candidate, not an automatic low-end deployment choice. Its language list covers nine requested Indic languages, not English. [S1]
+- IndicConformer-600M multilingual exported per-language to ONNX + INT8 quantisation. MIT license.
+- Each pack ~45â€“70 MB. Load only active language.
+- Greedy CTC decoding; beam search measured independently.
+- Used on devices with <6 GB RAM or when Gemma latency exceeds budget.
+- Keeps existing `core/asr` interface boundary clean â€” swap implementation behind `AsrEngine`.
 
-**Lane C — Custom compact student, only after feasibility gate**
+**Lane C â€” Custom Compact Student (Only After Feasibility Gate)**
 
-- Choose a compact CTC Conformer/FastConformer student in an initial planning envelope of roughly 20–80M parameters; the final architecture depends on experiments.
-- Distill from a properly licensed teacher and fine-tune using licensed native audio.
-- Begin with one difficult language and one well-resourced language to test the recipe.
-- A language-specific output head alone does not remove a shared encoder's memory cost.
-- Do not promise a new highly accurate ten-language student within a short hackathon. If this lane is required, reserve training compute, native reviewers, and schedule contingency.
+- Choose compact CTC Conformer/FastConformer student (~20â€“80M params) if Gemma + fallback both fail on low-end.
+- Distill from properly licensed teacher; fine-tune with licensed native audio.
+- Begin with one difficult + one well-resourced language to test recipe.
+- Do not promise new ten-language student within short timeline; reserve compute/reviewers/contingency if needed.
 
 ### 6.3 TTS candidate lanes
 
-**Lane A — Compact per-language neural synthesis**
+**Lane A â€” Compact per-language neural synthesis**
 
 - Evaluate verified VITS/Piper-compatible or other compact models for each language individually.
 - Do not claim that Piper or sherpa-onnx supplies high-quality voices for all ten languages out of the box.
 - If a voice is missing, train/fine-tune a compact acoustic model and vocoder only with authorized data and a compatible frontend.
 - Validate grapheme/phoneme vocabulary, number expansion, punctuation, vocoder sample rate, and voice license.
 
-**Lane B — DhVaani feasibility experiment**
+**Lane B â€” DhVaani feasibility experiment**
 
 - Its model card lists all ten requested languages among 27 and states Apache-2.0. It is based on a 123M-parameter flow-matching model, with a listed 491 MB weights file and a reference-audio requirement. [S3]
 - This is a promising coverage candidate, **not evidence of low-end Android readiness**.
@@ -343,12 +359,12 @@ Ledger fields: source revision, task, language tags, code license, weight licens
 - Test fewer flow steps only as an explicit quality/latency experiment. A lower step count is not automatically acceptable.
 - The card warns that rare out-of-vocabulary characters may be silently dropped. The app must detect unsupported critical text before synthesis.
 
-**Lane C — Quality references, not default deployment**
+**Lane C â€” Quality references, not default deployment**
 
 - IndicF5 explicitly lists the nine requested Indic languages among eleven, but does not list English. It requires reference audio and reference text. Verify all weights/dependencies/licenses before use. [S4]
 - Large generative TTS models can serve as offline development references if permitted; do not infer phone feasibility from desktop demos.
 
-**Lane D — Non-neural engineering fallback**
+**Lane D â€” Non-neural engineering fallback**
 
 - eSpeak NG's source language list includes the requested languages, including Odia. Verify the exact distributed build with `espeak-ng --voices`. [S5]
 - Use it to unblock early transport/UX testing or as a clearly labeled degraded fallback.
@@ -388,7 +404,7 @@ If any language has no viable candidate, mark the ten-language release **blocked
 7. Push fixed-size chunks into a bounded reusable ring.
 8. Apply lightweight preprocessing and VAD outside the audio callback/read loop.
 
-**PCM sanity check:** 16,000 samples/s × 16 bits × 1 channel = 256,000 bits/s. A 20 ms PCM16 frame has 320 samples and 640 bytes. This local capture rate is not the transmitted bitrate.
+**PCM sanity check:** 16,000 samples/s Ã— 16 bits Ã— 1 channel = 256,000 bits/s. A 20 ms PCM16 frame has 320 samples and 640 bytes. This local capture rate is not the transmitted bitrate.
 
 ### 7.2 DSP policy
 
@@ -407,11 +423,11 @@ These are **initial tunable settings**, not validated language-independent const
 | Setting | Starting value | Rationale |
 |---|---|---|
 | Capture processing frame | 20 ms | Fits WebRTC-style frame handling; aggregate as another VAD requires |
-| Pre-roll | 200–300 ms | Preserve initial consonants |
-| Minimum speech | 150–250 ms | Reject short transients without excluding short words |
+| Pre-roll | 200â€“300 ms | Preserve initial consonants |
+| Minimum speech | 150â€“250 ms | Reject short transients without excluding short words |
 | End-of-speech silence | 450 ms default | Balance natural pauses and latency |
-| Allowed silence tuning | 250–800 ms | Device/noise/speaking-style experiment range |
-| Post-roll | 100–200 ms | Preserve final syllables |
+| Allowed silence tuning | 250â€“800 ms | Device/noise/speaking-style experiment range |
+| Post-roll | 100â€“200 ms | Preserve final syllables |
 | Soft utterance cap | 8 s | Seek safe segment boundary |
 | Hard utterance cap | 12 s | Bound memory and offline inference tail |
 | Maximum PTT hold | 30 s initial | Split safely before cap; prevent stuck floor |
@@ -450,50 +466,48 @@ Measure missed-start rate, clipped-end rate, false speech segments/hour, silence
 
 ### 8.1 Recognition contract
 
-Input: language tag, normalized PCM frames, sample rate, utterance ID, capture start/end, and optional constrained vocabulary hints.
+Input: language tag, normalized PCM frames (16 kHz mono), sample rate, utterance ID, capture start/end, optional constrained vocabulary hints, optional target language for translation.
 
 Output events:
 
-- `Partial`: locally replaceable hypothesis, not eligible for remote playback.
-- `Final`: immutable committed text, language, segment index, finalization timestamp, and optional calibrated uncertainty metadata.
+- `Partial`: **Not applicable for Gemma 4 E2B** (autoregressive, no streaming partials). For ONNX CTC fallback: locally replaceable hypothesis, not eligible for remote playback.
+- `Final`: immutable committed text, source language, target language (if translated), segment index, finalization timestamp, optional calibrated uncertainty metadata.
 - `NoSpeech`: no trustworthy text to transmit.
 - `Failure`: typed reason such as model missing, unsupported input, memory pressure, or inference error.
 
 ### 8.2 Decoder choices
 
+**Gemma 4 E2B (Primary):**
+- Autoregressive token generation after end-of-speech. No CTC decoder, no beam search, no partial hypotheses.
+- Temperature 0 for deterministic output; max tokens per segment bounded by 30 s audio limit.
+- Translation: same audio path, specify target language in prompt; outputs `translated_text` alongside `text`.
+
+**ONNX CTC Fallback:**
 - Begin with greedy CTC when the chosen model supports it and accuracy is viable.
 - Measure beam search independently; increased beam width may improve some words but raises CPU and latency.
 - Add a small local lexicon/hotword mechanism only if the decoder supports it.
 - Do not force critical terms into the transcript because they are in a hotword list.
 - Automatic punctuation is optional and must not change lexical content.
-- Do not add a generative LLM “cleanup” pass to emergency speech.
+- Do not add a generative LLM "cleanup" pass to emergency speech.
 - Never use Whisper's translation task when same-language transcription is required.
 
 ### 8.3 Streaming policy
 
-**True streaming checkpoint:** feed chunked acoustic features with the model's documented state/cache and right context. Bound cache lifetime and reset on segment/session changes.
+**Gemma 4 E2B:** Not a streaming model. Recognizes bounded utterances (VAD/endpointed segments, max 30 s). Full forward pass after speech ends. No partials, no overlap, no reconciliation.
 
-**Offline checkpoint:** recognize bounded utterances or overlapping windows. Explicitly document look-ahead, overlap, repeated compute, reconciliation, and hard-cut behavior.
+**ONNX CTC Fallback:** Recognize bounded utterances. Explicitly document look-ahead, overlap, repeated compute, reconciliation, and hard-cut behavior if overlapping windows are used.
 
-**Remote commit policy:** default to final endpointed segments. An advanced stable-prefix mode may be evaluated only after proving prefix immutability and preserving critical phrases. Do not speak “safe” before the model discovers a preceding/following negation or correction.
+**Remote commit policy:** Default to final endpointed segments for both engines. No stable-prefix mode â€” Gemma emits full text only after endpoint; CTC partials are local UI only, never transmitted.
 
-### 8.4 Optimization sequence
+### 8.4 Optimization sequence (Gemma 4 E2B)
 
-1. Record unoptimized FP32 reference outputs.
-2. Reproduce exact frontend behavior on desktop and phone.
-3. Export with fixed, supported opset/runtime versions.
-4. Compare logits or intermediate outputs on golden audio where feasible.
-5. Evaluate FP16 only where actual hardware/runtime makes it beneficial.
-6. Apply supported INT8 quantization to selected operators.
-7. Use representative native-language speech/noise for calibration when required.
-8. Re-measure WER, CER, entity preservation, latency, PSS, and energy.
-9. Tune inference threads, typically testing 1, 2, and 4 rather than maximizing them.
-10. Build a reduced-operator native runtime only after freezing model operators.
-11. Consider distillation/structured model changes only after easy optimizations.
+1. **Phase 0 validation:** Run Google AI Edge Gallery Audio Scribe on target languages (1â€“2 days, zero cost).
+2. **Desktop evaluation harness:** Use LiteRT-LM CLI/Python API with `litert-community/gemma-4-E2B-it-litert-lm`; run captured audio, compute WER per language vs IndicConformer baseline, score translation pairs (3â€“5 days).
+3. **TranslateGemma fallback:** Lightweight 55-language open translation models for on-device if Gemma built-in translation disappoints.
+4. **Android integration:** Add `flutter_gemma` binding; implement `GemmaAsrEngine` beside ONNX engine behind same `AsrEngine` interface; reuse `AudioCapturePlugin` frames â€” audio segment in, JSON `{text, lang, translated_text?, tgt_lang?}` out.
+5. **Backend selection:** In `platform_info` capability probe (free RAM / GPU delegate), keeping no-inline-`Platform.isIOS` discipline.
 
-Weight-only quantization may reduce storage without accelerating unsupported CPU kernels. Dynamic/static quantization and RNNT components have different support. Do not promise universal 4× speedups or equivalent accuracy.
-
-### 8.5 Compact-student training path
+### 8.5 Compact-student training path (Fallback Lane C Only)
 
 - Freeze reproducible train/dev/test speaker splits first.
 - Use licensed teacher outputs only where license and data consent permit.
@@ -534,8 +548,8 @@ Define per-language tests for:
 
 - Integers, decimals, negative signs, percentages, dates, time, distances, units, phone numbers, coordinates, addresses, and identifiers.
 - Leading zeroes and sequences that must be spoken digit by digit.
-- Negation: “do not enter” versus “enter.”
-- Counts: “two people” versus “twenty people.”
+- Negation: â€œdo not enterâ€ versus â€œenter.â€
+- Counts: â€œtwo peopleâ€ versus â€œtwenty people.â€
 - Directions and locations: east/west, left/right, floor and gate numbers.
 
 Do not derive numbers from guessed semantics. If critical content is uncertain, attach an uncertainty cue and offer a repeat/confirm flow. A recognizer score is not a calibrated probability unless explicitly calibrated.
@@ -548,7 +562,7 @@ Do not derive numbers from guessed semantics. If critical content is uncertain, 
 - Optional language identification runs only if it meets cost and accuracy gates.
 - Do not repeatedly switch models mid-utterance on weak evidence.
 - If a receiver lacks the pack, return `UNSUPPORTED_LANGUAGE`, provide a recognizable audible failure cue, and retain text. Do not silently read using the wrong language voice.
-- Translation is a separate future feature and never a hidden fallback.
+- **Cross-language translation (Gemma 4 E2B):** Sender-side translation. Sender knows source language reliably; sends both `text` (source) and `translated_text` (target) with `src_lang` and `tgt_lang`. Receiver uses `tgt_lang` to select TTS voice. ~100â€“200 bytes becomes ~400 bytes, still trivially within Bluetooth budget. Translation is explicit, never a hidden fallback.
 
 ---
 
@@ -683,7 +697,7 @@ Use a user-started foreground communication service with only the service types 
 | QR pairing | CAMERA only if QR scanner enabled | Offer manual verification alternative |
 | DND behavior | Explicit notification policy access only if justified | Optional, user-granted; never imply automatic bypass |
 
-Audit Wi-Fi API-specific location requirements instead of blanket-removing location permissions. `neverForLocation` is only appropriate when truthful. Verify current target SDK and behavior on actual build devices. [S8–S9]
+Audit Wi-Fi API-specific location requirements instead of blanket-removing location permissions. `neverForLocation` is only appropriate when truthful. Verify current target SDK and behavior on actual build devices. [S8â€“S9]
 
 ### 12.3 Lifecycle edge cases
 
@@ -812,18 +826,23 @@ session_context
 message_id                  128-bit random identifier
 sender_identity_reference   bound to authenticated peer
 sequence_number             per-direction monotonic within session
-language_tag
+src_lang                    source language (BCP-47)
+tgt_lang                    target language (BCP-47) â€” equals src_lang for same-language
 priority                    NORMAL / ALERT
 created_time_metadata       optional wall time, not sole freshness authority
 remaining_lifetime_ms       bounded age/expiry semantics
 utterance_id
 segment_index
 is_final_segment
-flags                       uncertainty, continuation, template, etc.
-text_utf8 OR template_id + bounded typed slots
+flags                       uncertainty, continuation, template, translation, etc.
+text_utf8                   source transcript (required)
+translated_text_utf8        target translation (optional, present when tgt_lang != src_lang)
+template_id + typed slots   alternative to text for alerts
 ```
 
 This is a **logical schema**, not a claim about exact encoded packet bytes. Encode with compact deterministic integer keys/enums where beneficial. Version and freeze actual framing after serialization tests.
+
+**Wire format for cross-language (Phase 3):** Extend protocol messages with `src_lang`, `tgt_lang`, and optional `translated_text` field. Sender translates, sends both strings â€” ~100â€“200 bytes becomes ~400 bytes, still trivially within Bluetooth budget. Receiving phone's TTS speaks `tgt_lang` text. Loopback test with `LinkProfile.poor` carries over unchanged.
 
 ### 14.4 Size limits and framing
 
@@ -875,7 +894,7 @@ Terminal/exception states: EXPIRED, REJECTED, FAILED, CANCELLED, PLAYBACK_UNKNOW
 - Deduplicate before enqueueing playback.
 - Preserve normal segment order; alerts can bypass queued normal messages at the next bounded scheduling boundary.
 - If a missing segment exceeds timeout, expose a gap and ask for retransmission rather than silently concatenating contradictory text.
-- Do not promise exactly-once audible output across a crash between speaker output and persisted completion. Use conservative recovery and an “already may have played” state.
+- Do not promise exactly-once audible output across a crash between speaker output and persisted completion. Use conservative recovery and an â€œalready may have playedâ€ state.
 
 ### 14.8 Alert abuse and privacy
 
@@ -908,9 +927,9 @@ A comparison with raw PCM is illustrative, not a fair replacement for comparing 
 
 For a hypothetical **240-byte application record including chosen application overhead**, serialization alone is:
 
-- At 300 bps: `240 × 8 / 300 = 6.4 seconds`.
-- At 1,200 bps: `240 × 8 / 1,200 = 1.6 seconds`.
-- At 9,600 bps: `240 × 8 / 9,600 = 0.2 seconds`.
+- At 300 bps: `240 Ã— 8 / 300 = 6.4 seconds`.
+- At 1,200 bps: `240 Ã— 8 / 1,200 = 1.6 seconds`.
+- At 9,600 bps: `240 Ã— 8 / 9,600 = 0.2 seconds`.
 
 These are arithmetic examples, not measured message sizes or physical radio airtime. Actual link headers, scheduling, authentication handshake, loss, acknowledgments, and retries can increase time. Do not promise subsecond end-to-end latency at 300 bps for arbitrary sentences.
 
@@ -955,7 +974,7 @@ Priority order:
 
 ## 16. Alerts, accessibility, and safety
 
-### 16.1 Practical interpretation of “non-interruptible”
+### 16.1 Practical interpretation of â€œnon-interruptibleâ€
 
 **Implementable app-level guarantee:** Once an authorized alert begins, ordinary app messages cannot replace it or lower its priority. The user retains an emergency stop and the OS retains audio/lifecycle control.
 
@@ -989,7 +1008,7 @@ Document this discrepancy in the proposal and demonstrate the agreed policy. Do 
 - Haptic feedback for recording start/end, delivered, error, and alert.
 - Color is never the only status signal.
 - Support TalkBack labels, large font scaling, high contrast, and one-handed use.
-- Offer replay and “please repeat” without requiring typing.
+- Offer replay and â€œplease repeatâ€ without requiring typing.
 - Keep text visible for users with hearing loss even though speech is the primary communication path.
 - Avoid continuous spoken status that masks incoming speech.
 
@@ -1015,6 +1034,13 @@ Each signed pack contains:
 - A tiny authorized self-test input/output expectation or invariant test.
 - Compatibility version and optional measured device-profile metadata.
 
+**Pack types:**
+| Pack Type | Format | Size | Runtime | Languages |
+|---|---|---|---|---|
+| Gemma 4 E2B ASR | `.litertlm` | 2.58 GB | LiteRT-LM | All 10+ (single pack) |
+| ONNX CTC ASR (fallback) | `.onnx` + vocab | 45â€“70 MB each | ONNX Runtime | Per-language (9 Indic) |
+| TTS (DhVaani/IndicF5) | ONNX + vocoder | 25â€“60 MB each | ONNX Runtime | Per-language |
+
 ### 17.2 Import workflow
 
 1. User chooses a local pack through Storage Access Framework.
@@ -1030,20 +1056,22 @@ Each signed pack contains:
 
 ### 17.3 Distribution profiles
 
-- **Development profile:** one or two languages, debug tooling, several candidate engines if needed.
-- **Competition bundle:** signed APK plus all ten approved offline language packs and source/license package.
-- **Operational profile:** user selects needed installed languages, while the device can still provision all required packs offline.
+- **Development profile:** Gemma pack (2.58 GB) + 1â€“2 ONNX CTC fallback packs + TTS packs, debug tooling.
+- **Competition bundle:** signed APK + Gemma pack + all ten ONNX CTC fallback packs + all TTS packs + source/license package.
+- **Operational profile:** user selects needed installed languages; Gemma pack optional (6 GB+ devices), ONNX CTC packs for all languages.
 
-Clarify whether organizers require all ten languages inside a single APK or merely available entirely offline after installation. Pack modularity reduces active memory, not total all-language storage.
+Clarify whether organizers require all ten languages inside a single APK or merely available entirely offline after installation. Pack modularity reduces active memory, not total all-language storage. Gemma pack is single-file for all languages; ONNX CTC is per-language.
 
 ### 17.4 Memory residency
 
-- Keep one active ASR and one active TTS model only when combined PSS fits.
+- **Gemma 4 E2B:** ~1.1 GB resident on mobile config; 676 MBâ€“1.7 GB peak measured. Load only on 6 GB+ devices (probed via `platform_info`).
+- **ONNX CTC fallback:** ~45â€“70 MB per language. Keep one active ASR + one active TTS when combined PSS fits.
 - On receive-only/transmit-only devices, unload the unused task model.
 - For bidirectional mode, measure both simultaneously; separate low memory results from one-way measurements.
 - Evict least-recently-used inactive packs and release native sessions deterministically.
 - Measure language-switch and cold-model latency explicitly.
 - Thermal/resource fallback must remain visible and must not silently change language or meaning.
+- **Backend selection logic:** `platform_info` probes free RAM + GPU delegate; if â‰¥6 GB and GPU delegate available â†’ Gemma; else â†’ ONNX CTC. No inline `Platform.isIOS` checks.
 
 ---
 
@@ -1111,7 +1139,7 @@ Additional metrics:
 
 - Blind/randomize model labels and sample ordering.
 - Ask native listeners to transcribe or answer factual questions about heard content.
-- Score naturalness/flow on a documented 1–5 MOS scale separately from intelligibility.
+- Score naturalness/flow on a documented 1â€“5 MOS scale separately from intelligibility.
 - Include enough listeners and repeated ratings to quantify variability; a few team opinions are not a robust MOS claim.
 - Normalize playback conditions and document route, loudness, noise, and hearing accommodations.
 - Evaluate cached and dynamic synthesis separately.
@@ -1143,19 +1171,24 @@ All values below are **proposed team targets**, not official SIH thresholds and 
 | Metric | Proposed starting target | Measurement conditions |
 |---|---|---|
 | Base release APK excluding packs | <= 100 MB | ARM64 build; report ABI variants separately |
-| Active ASR pack | Aim <= 150 MB | Include vocabulary/frontend; larger needs review |
+| **Gemma 4 E2B ASR pack** | **2.58 GB disk, ~1.1 GB resident** | **LiteRT-LM, 6 GB+ devices only** |
+| Active ONNX CTC ASR pack (fallback) | Aim <= 70 MB | Include vocabulary/frontend; per-language |
 | Active TTS pack | Aim <= 100 MB | Include vocoder/reference assets; larger needs review |
-| Combined steady PSS | Aim <= 500 MB | Active bidirectional session, low-end phone |
-| Peak PSS | Aim <= 700 MB | Model load + concurrent inference stress |
+| Combined steady PSS (Gemma path) | Aim <= 1.5 GB | Active bidirectional session, 6 GB+ phone |
+| Combined steady PSS (ONNX CTC path) | Aim <= 500 MB | Active bidirectional session, low-end phone |
+| Peak PSS (Gemma) | Aim <= 2.0 GB | Model load + concurrent inference stress |
+| Peak PSS (ONNX CTC) | Aim <= 700 MB | Model load + concurrent inference stress |
 | Idle VAD/listening CPU | Aim <= 5% of one core equivalent | Connected session, screen off, declared CPU metric |
 | Silence ASR invocation | Zero routine ASR calls | Except explicitly measured false triggers |
-| Warm ASR RTF | <= 0.7 desirable; <1 required for sustained selected profile | Actual language/device/concurrency |
+| **Gemma: Time-to-first-token (TTFT)** | **<= 500 ms p95 (GPU), <= 1200 ms p95 (CPU)** | **Warm, 2â€“4 s utterance, flagship / mid-range** |
+| **Gemma: Decode throughput** | **>= 20 tokens/s (GPU), >= 8 tokens/s (CPU)** | **Warm, sustained decode** |
+| **ONNX CTC: Warm ASR RTF** | **<= 0.7 desirable; <1 required** | **Actual language/device/concurrency** |
 | TTS total synthesis RTF | <= 0.7 desirable; <1 for uninterrupted dynamic output | Actual output duration and device |
 | Warm receive-to-first-audio | p95 <= 700 ms | No queue, normal local link, uncached synthesis |
 | Endpoint silence delay | Default 450 ms | Report separately from compute |
 | Speech-end to first remote audio | p95 <= 2 s stretch target | Warm, short utterance, healthy local link, no congestion |
 
-A combined PSS target includes native runtime, activations, UI, audio, database, and both speech tasks. Separate pack targets are not a guarantee that all-language deployment fits or reaches these budgets.
+A combined PSS target includes native runtime, activations, UI, audio, database, and both speech tasks. Separate pack targets are not a guarantee that all-language deployment fits or reaches these budgets. **Gemma path requires 6 GB+ RAM; ONNX CTC path is fallback for <6 GB devices.**
 
 ### 19.3 Latency definitions
 
@@ -1165,7 +1198,7 @@ Capture local monotonic timestamps:
 A0 = first acoustic speech sample
 A1 = last acoustic speech sample
 A2 = endpoint decision
-A3 = ASR final result ready
+A3 = ASR final result ready (Gemma: TTFT + decode time; CTC: full forward pass)
 A4 = message committed to outbox
 A5 = first application byte handed to transport
 B0 = complete authenticated message available
@@ -1179,8 +1212,10 @@ B5 = playback completed
 Metrics:
 
 - Endpoint delay: `A2 - A1`.
-- STT finalization tail: `A3 - A1`, with endpoint and residual compute breakdown.
-- STT processing RTF: model compute wall time / processed input audio duration; disclose repeated-window work.
+- **Gemma STT finalization: `A3 - A1` = TTFT + token decode time** (no partial hypotheses).
+- **ONNX CTC STT finalization: `A3 - A1` = full forward pass time**.
+- STT processing RTF (CTC only): model compute wall time / processed input audio duration; disclose repeated-window work.
+- **Gemma metrics: TTFT (ms), tokens/s** â€” replaces RTF for autoregressive models.
 - Receive-to-PCM: `B2 - B0`.
 - Receive-to-audible: `B4 - B0`.
 - TTS synthesis RTF: synthesis wall time / generated audio duration.
@@ -1283,8 +1318,8 @@ Report timestamp uncertainty. Do not claim millisecond-accurate inter-phone late
 
 ### 20.2 Interaction rules
 
-- No apparent “sent” success before the packet is actually queued/sent; use precise labels.
-- No “heard” claim from playback-completed receipt.
+- No apparent â€œsentâ€ success before the packet is actually queued/sent; use precise labels.
+- No â€œheardâ€ claim from playback-completed receipt.
 - Status earcons must be short, recognizable, and user-adjustable.
 - Do not make an alert or recording button dependent on small text links.
 - Keep native-script font rendering legible at large accessibility sizes.
@@ -1443,42 +1478,80 @@ Each error needs: user-facing message, audible/haptic equivalent, retriable/non-
 
 ## 22. Implementation work packages
 
-### WP0 — Requirements, device, and license baseline
+## 22. Implementation work packages
+
+### WP0 â€” Requirements, device, and license baseline
 
 **Tasks**
 
-- Convert the statement into R01–R18 traceability.
+- Convert the statement into R01â€“R19 traceability (R19 = cross-language walkie-talkie).
 - Send organizer questions from section 29.
-- Obtain two low-end and two mid-range test phones where possible.
+- Obtain two low-end (<6 GB), two mid-range (4â€“6 GB), and two high-end (6 GB+) test phones where possible.
 - Pin SDK/NDK/toolchain and create release-build CI.
-- Create model/source ledger and license policy.
+- Create model/source ledger and license policy (Gemma 4 Apache-2.0, DhVaani Apache-2.0, eSpeak NG GPL-3.0 build-time).
 - Define baseline benchmark harness and held-out pilot manifests.
 
 **Deliverables:** architecture ADR, device matrix, coverage ledger, compliance checklist.
 
 **Exit gate:** team can build/install a signed local test APK and identify the exact hardest feasibility risks.
 
-### WP1 — Offline speech feasibility spikes
+### WP1 â€” Gemma 4 E2B validation (Phase 0: 1â€“2 days, zero cost)
 
 **Tasks**
 
-- Run English/Hindi arbitrary ASR and TTS on desktop and physical phone.
-- Test an explicitly Odia-capable ASR path immediately.
-- Run DhVaani or compact TTS candidate on native target path, not just Python.
-- Check export/operator/frontend/vocoder compatibility.
-- Measure cold/warm time, PSS, artifact bytes, and sample quality.
-- Ask native speakers to evaluate pilot examples.
+- Install Google AI Edge Gallery from Play Store; open Audio Scribe.
+- Transcribe/translate recorded clips in all 10 target languages (hi, gu, mr, kn, ml, ta, te, or, bn, en-IN), especially noisy and code-switched speech.
+- Deliverable: go/no-go table of per-language quality (WER, translation accuracy, code-switch handling).
+- **Do not skip** â€” audio-language coverage is narrower than 140-language text claim.
 
-**Deliverables:** reproducible candidate reports; accept/reject decisions with evidence.
+**Exit gate:** Gemma 4 E2B passes quality threshold for â‰¥8/10 languages; otherwise fall back to ONNX CTC as primary.
 
-**Exit gate:** at least one feasible two-language loop plus a credible measured Odia route. If not, replan before building elaborate UI.
+### WP2 â€” Desktop evaluation harness (Phase 1: 3â€“5 days)
 
-### WP2 — Audio and local loop
+**Tasks**
+
+- Use LiteRT-LM CLI/Python API with `litert-community/gemma-4-E2B-it-litert-lm`.
+- Run existing captured audio through Gemma; compute WER per language vs IndicConformer baseline.
+- Score translation for cross-language pairs (hiâ†”en, bnâ†”hi, etc.).
+- Evaluate TranslateGemma (55-language lightweight) as fallback if Gemma built-in translation disappoints.
+
+**Deliverables:** WER/translation tables per language; decision on primary vs fallback engine.
+
+**Exit gate:** Gemma WER competitive with IndicConformer on â‰¥8 languages; translation usable for target pairs.
+
+### WP3 â€” Android integration (Phase 2: 1â€“2 weeks)
+
+**Tasks**
+
+- Add `flutter_gemma` dependency (community Flutter binding for LiteRT-LM).
+- Implement `GemmaAsrEngine` beside `OnnxCtcAsrEngine` behind same `AsrEngine` interface.
+- Reuse `AudioCapturePlugin` frames â€” audio segment in, JSON `{text, src_lang, translated_text?, tgt_lang?}` out.
+- Backend selection in `platform_info` capability probe (free RAM / GPU delegate).
+- iOS: `flutter_gemma` covers iOS; LiteRT-LM Swift API is early preview; Dart call sites stay shared.
+
+**Deliverable:** Gemma engine integrated, selectable at runtime based on device capability.
+
+**Exit gate:** Gemma runs on 6 GB+ device; ONNX CTC fallback runs on <6 GB device; both behind same interface.
+
+### WP4 â€” Wire format for cross-language (Phase 3: 2â€“3 days)
+
+**Tasks**
+
+- Extend protocol messages with `src_lang`, `tgt_lang`, optional `translated_text` field.
+- Sender translates, sends both strings (~100â€“200 bytes â†’ ~400 bytes, within Bluetooth budget).
+- Receiver uses `tgt_lang` to select TTS voice.
+- Update `CapabilitiesMessage` to advertise translation support.
+
+**Deliverable:** Cross-language walkie-talkie mode functional.
+
+**Exit gate:** Cross-language loop works end-to-end; same-language mode unchanged.
+
+### WP5 â€” Audio and local loop (formerly WP2)
 
 **Tasks**
 
 - Implement capture ring, resampler, VAD, segment state machine.
-- Integrate ASR contract and immutable final events.
+- Integrate ASR contract (both Gemma + ONNX CTC) and immutable final events.
 - Integrate TTS and AudioTrack with error handling.
 - Build local loopback diagnostic using recorded fixtures and live capture.
 - Add metrics events and cancellation cleanup tests.
@@ -1487,7 +1560,7 @@ Each error needs: user-facing message, audible/haptic equivalent, retriable/non-
 
 **Exit gate:** bounded memory, no UI thread blocking, and no silence hallucination spam.
 
-### WP3 — Framed phone-to-phone communication
+### WP6 â€” Framed phone-to-phone communication (formerly WP3)
 
 **Tasks**
 
@@ -1501,11 +1574,11 @@ Each error needs: user-facing message, audible/haptic equivalent, retriable/non-
 
 **Exit gate:** no duplicate normal playback during bounded retries and reconnect tests.
 
-### WP4 — Two-phone speech walkie-talkie
+### WP7 â€” Two-phone speech walkie-talkie (formerly WP4)
 
 **Tasks**
 
-- Connect ASR final events to outbox and received messages to TTS.
+- Connect ASR final events (both engines) to outbox and received messages to TTS.
 - Implement PTT floor controller, release finalization, earcons, and replay.
 - Test both directions and swap transmit/receive roles.
 - Add endpoint, transport, TTS, and audible latency instrumentation.
@@ -1514,21 +1587,21 @@ Each error needs: user-facing message, audible/haptic equivalent, retriable/non-
 
 **Exit gate:** repeated unseen live speech, not a fixed demo phrase, traverses the full path.
 
-### WP5 — Language coverage and optimization
+### WP8 â€” Language coverage and optimization (formerly WP5)
 
 **Tasks**
 
 - Complete each language ledger row through license, export, device, and native-QA gates.
-- Optimize quantization/threads/model residency.
+- Optimize quantization/threads/model residency for both Gemma and ONNX CTC.
 - Build deterministic text frontends and critical-entity tests.
-- Train/fine-tune compact replacements only when necessary and resourced.
+- Train/fine-tune compact replacements only when necessary and resourced (Lane C).
 - Package all validated assets for offline installation.
 
 **Deliverable:** ten-language release candidate or explicit documented blockers.
 
-**Exit gate:** every language passes both arbitrary STT and TTS on the required low-end profile.
+**Exit gate:** every language passes both arbitrary STT (Gemma or ONNX CTC) and TTS on required device profile.
 
-### WP6 — Hands-free and Android hardening
+### WP9 â€” Hands-free and Android hardening (formerly WP6)
 
 **Tasks**
 
@@ -1542,7 +1615,7 @@ Each error needs: user-facing message, audible/haptic equivalent, retriable/non-
 
 **Exit gate:** no self-amplifying speech loop, silent data loss, or undocumented background recording.
 
-### WP7 — Alert and constrained-link robustness
+### WP10 â€” Alert and constrained-link robustness (formerly WP7)
 
 **Tasks**
 
@@ -1555,21 +1628,21 @@ Each error needs: user-facing message, audible/haptic equivalent, retriable/non-
 
 **Exit gate:** stale/replayed/untrusted alerts do not auto-announce; normal messages cannot preempt active alerts inside the app.
 
-### WP8 — Embedded relay
+### WP11 â€” Embedded relay (formerly WP8)
 
 **Tasks**
 
 - Select exact board/interfaces and document topology.
 - Implement opaque frame relay with bounded buffers and diagnostics.
 - Add BLE fragmentation/credits or local Wi-Fi bridge adapter.
-- Validate full phone → bridge → link → bridge/peer → phone loop.
+- Validate full phone â†’ bridge â†’ link â†’ bridge/peer â†’ phone loop.
 - Account for actual radio/link overhead and regulatory constraints if RF is used.
 
 **Deliverable:** firmware, wiring/setup guide, and measured hardware bridge demo.
 
 **Exit gate:** bridge is demonstrably forwarding real live generated text, not preloaded canned messages.
 
-### WP9 — Evaluation and release
+### WP12 â€” Evaluation and release (formerly WP9)
 
 **Tasks**
 
@@ -1578,6 +1651,7 @@ Each error needs: user-facing message, audible/haptic equivalent, retriable/non-
 - Run sustained low-end, noisy, low-bitrate, lifecycle, security, and offline tests.
 - Build source bundle, licenses, signed APK, packs, checksums, install guide, and demo runbook.
 - Rehearse complete offline reinstall and demonstration.
+- **Honest metrics update:** Replace "ASR RTF" with TTFT + tokens/s in diagnostics screen; re-run send â‰¤900 ms / phone-to-phone â‰¤1500 ms targets per device tier; declare misses in `requirements_traceability.md`.
 
 **Deliverable:** reproducible final submission with measured results and known limitations.
 
@@ -1589,12 +1663,12 @@ Each error needs: user-facing message, audible/haptic equivalent, retriable/non-
 
 ### 23.1 Suggested six-person ownership
 
-- **A — Android/audio lead:** capture, lifecycle, foreground service, playback, routing.
-- **B — ASR lead:** models, export, quantization, recognition evaluation.
-- **C — TTS/language lead:** synthesis, frontend, native reviewer coordination, voice licensing.
-- **D — Transport/security lead:** protocol, pairing, Bluetooth/Wi-Fi, retries.
-- **E — Embedded/performance lead:** bridge firmware, link emulator, profiling.
-- **F — QA/product/release lead:** UI integration, test automation, traceability, offline release/demo.
+- **A â€” Android/audio lead:** capture, lifecycle, foreground service, playback, routing.
+- **B â€” ASR lead:** models, export, quantization, recognition evaluation.
+- **C â€” TTS/language lead:** synthesis, frontend, native reviewer coordination, voice licensing.
+- **D â€” Transport/security lead:** protocol, pairing, Bluetooth/Wi-Fi, retries.
+- **E â€” Embedded/performance lead:** bridge firmware, link emulator, profiling.
+- **F â€” QA/product/release lead:** UI integration, test automation, traceability, offline release/demo.
 
 Cross-review: security changes reviewed by D and A; language normalization by C plus native reviewer; model claims by B/C and F; benchmark claims by E and F.
 
@@ -1602,26 +1676,27 @@ Cross-review: security changes reviewed by D and A; language normalization by C 
 
 | Week | Main outcome | Dependencies / gate |
 |---|---|---|
-| 1 | Device/license baseline; Hindi/English/Odia feasibility | No model decision without physical device evidence |
-| 2 | Local audio/VAD/ASR/TTS loop; initial native export | Fail/replan if low-end runtime route is blocked |
-| 3 | Framed authenticated text over Wi-Fi and Bluetooth | Protocol skeleton and identity verification |
-| 4 | Two-phone PTT speech loop; first complete measurements | Unseen arbitrary speech in both directions |
-| 5 | Additional language packs; frontend regression suite | Language-specific native review |
-| 6 | Ten-language feasibility gate; optimize largest blockers | Stop feature expansion if coverage unresolved |
+| 1 | Device/license baseline; **Gemma Phase 0 validation** (Audio Scribe test all 10 languages); Hindi/English/Odia feasibility | **Gemma go/no-go table**; no model decision without physical device evidence |
+| 2 | **Gemma Phase 1 desktop evaluation** (WER vs IndicConformer); Local audio/VAD/ASR/TTS loop; initial native export | **Gemma WER competitive on â‰¥8 langs**; fail/replan if low-end runtime route blocked |
+| 3 | **Gemma Phase 2 Android integration** (`flutter_gemma`, `GemmaAsrEngine`); Framed authenticated text over Wi-Fi and Bluetooth | Protocol skeleton and identity verification |
+| 4 | **Gemma Phase 3 wire format** (cross-language `src_lang`/`tgt_lang`); Two-phone PTT speech loop; first complete measurements | Unseen arbitrary speech in both directions; same-language + cross-language |
+| 5 | Additional language packs (ONNX CTC fallback); frontend regression suite | Language-specific native review |
+| 6 | Ten-language feasibility gate; optimize largest blockers (both Gemma + ONNX CTC) | Stop feature expansion if coverage unresolved |
 | 7 | Hands-free headset mode; service/lifecycle hardening | Combined ASR/TTS memory and echo tests |
 | 8 | Speakerphone/AEC tests; alert and low-bitrate robustness | Explicit full/half-duplex capability decision |
 | 9 | Embedded bridge end-to-end; pack installer | Hardware availability and protocol freeze |
 | 10 | Frozen evaluation set; broad native-language assessment | No last-minute test-set tuning |
 | 11 | Thermal/battery/security/fault-injection release fixes | Re-run affected accuracy and latency tests |
-| 12 | Offline installation rehearsal and final submission | Definition of done / disclosed exceptions |
+| 12 | Offline installation rehearsal and final submission; **Honest metrics update** (TTFT + tokens/s) | Definition of done / disclosed exceptions |
 
-This schedule assumes access to viable pretrained/exportable assets. Training a missing ten-language model suite can exceed twelve weeks; raise that risk immediately rather than hiding it inside “integration.”
+This schedule assumes access to viable pretrained/exportable assets (Gemma 4 E2B available). Training a missing ten-language model suite can exceed twelve weeks; raise that risk immediately rather than hiding it inside "integration."
 
 ### 23.3 Critical path
 
 ```text
-legal model access -> exact language coverage -> native export -> low-end inference
--> native accuracy/intelligibility -> complete two-phone loop -> sustained tests
+Gemma Phase 0 validation -> Phase 1 desktop eval -> Phase 2 Android integration
+-> Phase 3 cross-language wire -> native accuracy/intelligibility
+-> complete two-phone loop (both langs) -> sustained tests
 -> frozen evaluation -> offline release bundle
 ```
 
@@ -1629,17 +1704,17 @@ UI polish, diagrams, optional translation, and elaborate RF hardware must not di
 
 ### 23.4 First 72 hours
 
-**Day 1:** build/install Android shell; acquire actual phones; reproduce candidate ASR/TTS locally; audit licenses; start Odia validation.
+**Day 1:** build/install Android shell; acquire actual phones (include 6 GB+); install Google AI Edge Gallery; run Audio Scribe on all 10 languages; audit licenses (Gemma Apache-2.0); start Odia validation.
 
-**Day 2:** native inference spike; record model bytes/PSS/RTF; implement frame capture/VAD; exchange arbitrary text over one transport.
+**Day 2:** Gemma desktop inference spike (LiteRT-LM CLI); record model bytes/PSS/TTFT/tokens/s; implement frame capture/VAD; exchange arbitrary text over one transport.
 
-**Day 3:** connect one-language speech loop; test no-WAN operation; log end-to-end stages; publish pass/fail evidence and next decisions.
+**Day 3:** connect one-language speech loop (Gemma on 6 GB+ device); test no-WAN operation; log end-to-end stages (TTFT, tokens/s, send/recv/delta); publish pass/fail evidence and next decisions.
 
 ### 23.5 Short hackathon sprint fallback
 
-If only 36–48 hours remain, and **only if models and licenses are already validated**:
+If only 36â€“48 hours remain, and **only if models and licenses are already validated**:
 
-1. Freeze candidate pack versions; avoid training a new model.
+1. Freeze candidate pack versions (Gemma + ONNX CTC fallback); avoid training a new model.
 2. Integrate one transport and PTT first.
 3. Demonstrate an arbitrary-speech two-phone loop.
 4. Add receipt states, offline evidence, and failure handling.
@@ -1696,6 +1771,7 @@ Specify whether each profile rate is one-way, shared half-duplex, or per-directi
 |---|---|---|
 | AT01 | Fresh offline install with supplied APK/packs | No first-use cloud dependency; valid model activation |
 | AT02 | Each of ten languages, unseen arbitrary speech | Receiver speaks same-language content; scores recorded |
+| **AT02b** | **Cross-language: each of 10 srcÃ¢â€ â€™tgt pairs** | **Receiver speaks translated content in tgt_lang; scores recorded** |
 | AT03 | Quiet speech plus pause and PTT release | No clipped start/end; finalization is bounded |
 | AT04 | Long utterance past soft/hard cap | Ordered segments, no silent overflow |
 | AT05 | Silence/fan noise for sustained period | No repeated hallucinated messages; idle CPU measured |
@@ -1720,6 +1796,11 @@ Specify whether each profile rate is one-way, shared half-duplex, or per-directi
 | AT24 | Template dictionary mismatch | Full text fallback or explicit failure, never wrong phrase |
 | AT25 | WAN disabled, local radios enabled | Entire speech loop works with no hosted API |
 | AT26 | Embedded relay with live speech | Real text frames and hardware link metrics recorded |
+| **AT27** | **Gemma 4 E2B on 6 GB+ device: TTFT + tokens/s** | **p95 TTFT Ã¢â€°Â¤ 500 ms (GPU) / Ã¢â€°Â¤ 1200 ms (CPU); Ã¢â€°Â¥ 20 tok/s (GPU) / Ã¢â€°Â¥ 8 tok/s (CPU)** |
+| **AT28** | **Gemma 4 E2B WER per language** | **WER competitive with IndicConformer baseline on Ã¢â€°Â¥8/10 languages** |
+| **AT29** | **Gemma 4 E2B translation quality** | **Translation accuracy acceptable for target pairs (hiÃ¢â€ â€en, bnÃ¢â€ â€hi, etc.)** |
+| **AT30** | **Backend selection: <6 GB device uses ONNX CTC** | **Automatic fallback to ONNX CTC; no OOM; latency within budget** |
+| **AT31** | **Gemma 4 E2B code-switch handling** | **HindiÃ¢â‚¬â€œEnglish code-switch: Devanagari stays Devanagari mid-utterance** |
 
 ### 24.5 Security tests
 
@@ -1727,7 +1808,7 @@ Malformed CBOR, deeply nested structures, oversized length prefixes, UTF-8 corru
 
 ### 24.6 Regression policy
 
-Every model/frontend/runtime/quantization change reruns relevant language accuracy and TTS tests. Every protocol change reruns vectors/fuzz/reconnect tests. Every audio-path change reruns endpoint, echo, route, and latency tests. “Only a dependency update” is not exempt.
+Every model/frontend/runtime/quantization change reruns relevant language accuracy and TTS tests. Every protocol change reruns vectors/fuzz/reconnect tests. Every audio-path change reruns endpoint, echo, route, and latency tests. â€œOnly a dependency updateâ€ is not exempt.
 
 ---
 
@@ -1793,29 +1874,29 @@ Model access agreements and developer dependency acquisition are completed befor
 
 ### 26.3 Suggested live demonstration
 
-**Step 1 — Offline proof:** show WAN disabled, local radio enabled, model inventory, and no cloud speech engine.
+**Step 1 â€” Offline proof:** show WAN disabled, local radio enabled, model inventory, and no cloud speech engine.
 
-**Step 2 — Core loop:** evaluator speaks an unseen sentence into phone A; phone B speaks it. Swap roles.
+**Step 2 â€” Core loop:** evaluator speaks an unseen sentence into phone A; phone B speaks it. Swap roles.
 
-**Step 3 — Language proof:** demonstrate all ten using a concise planned rotation, including Odia and native-script text; keep full evidence available if live time is limited.
+**Step 3 â€” Language proof:** demonstrate all ten using a concise planned rotation, including Odia and native-script text; keep full evidence available if live time is limited.
 
-**Step 4 — Transport proof:** show Bluetooth and Wi-Fi runs; show live bridge path if implemented.
+**Step 4 â€” Transport proof:** show Bluetooth and Wi-Fi runs; show live bridge path if implemented.
 
-**Step 5 — Low-bitrate proof:** apply declared rate profile and show bytes, queue delay, and latency honestly.
+**Step 5 â€” Low-bitrate proof:** apply declared rate profile and show bytes, queue delay, and latency honestly.
 
-**Step 6 — Hands-free:** disable PTT, exchange speech automatically, and state headset/speakerphone/full- or half-duplex conditions.
+**Step 6 â€” Hands-free:** disable PTT, exchange speech automatically, and state headset/speakerphone/full- or half-duplex conditions.
 
-**Step 7 — Alert:** trusted peer sends an alert while normal message is queued/playing. Show preemption, consented volume, receipt, and acknowledgment.
+**Step 7 â€” Alert:** trusted peer sends an alert while normal message is queued/playing. Show preemption, consented volume, receipt, and acknowledgment.
 
-**Step 8 — Robustness:** disconnect/reconnect and replay duplicate input without duplicate normal announcements.
+**Step 8 â€” Robustness:** disconnect/reconnect and replay duplicate input without duplicate normal announcements.
 
-**Step 9 — Metrics:** show per-language/device WER, human intelligibility, model/storage/RAM/CPU, RTF, and stage latency with sources to raw logs.
+**Step 9 â€” Metrics:** show per-language/device WER, human intelligibility, model/storage/RAM/CPU, RTF, and stage latency with sources to raw logs.
 
 ### 26.4 Honest claims template
 
-> “On [exact device], with [model/runtime revision], [language], [audio route], and [link profile], our held-out test produced [measured result] across [sample count]. All inference ran locally. [Known limitation] remains.”
+> â€œOn [exact device], with [model/runtime revision], [language], [audio route], and [link profile], our held-out test produced [measured result] across [sample count]. All inference ran locally. [Known limitation] remains.â€
 
-Never replace missing measurements with claimed “near-zero latency,” “100% accuracy,” “all devices,” “guaranteed emergency delivery,” or “uninterruptible under all conditions.”
+Never replace missing measurements with claimed â€œnear-zero latency,â€ â€œ100% accuracy,â€ â€œall devices,â€ â€œguaranteed emergency delivery,â€ or â€œuninterruptible under all conditions.â€
 
 ---
 
@@ -1825,15 +1906,15 @@ Effort sizes are relative estimates, not guaranteed durations: S = small isolate
 
 | ID | Priority | Task | Owner | Size | Depends on | Acceptance |
 |---|---|---|---|---|---|---|
-| IT-001 | P0 | Device and SDK baseline | A/F | S | — | Physical device matrix committed |
-| IT-002 | P0 | Model/license coverage ledger | B/C | M | — | Ten rows with exact candidate provenance |
+| IT-001 | P0 | Device and SDK baseline | A/F | S | â€” | Physical device matrix committed |
+| IT-002 | P0 | Model/license coverage ledger | B/C | M | â€” | Ten rows with exact candidate provenance |
 | IT-003 | P0 | Odia ASR native feasibility | B | XL | IT-001/002 | Actual phone output, memory, timing |
 | IT-004 | P0 | Hindi/English ASR baseline | B | L | IT-001/002 | Unseen audio transcribed offline |
 | IT-005 | P0 | Compact TTS/DhVaani export spike | C | XL | IT-001/002 | Native arbitrary synthesis and metrics |
 | IT-006 | P0 | Capture ring + resampling | A | M | IT-001 | Golden sample/duration tests pass |
 | IT-007 | P0 | VAD and endpoint controller | A | M | IT-006 | Pause/release/clipping tests pass |
 | IT-008 | P0 | Local metrics schema/collector | E/F | M | IT-001 | Stage timings exported locally |
-| IT-009 | P0 | Protocol framing/schema vectors | D | M | — | Round-trip and malformed tests pass |
+| IT-009 | P0 | Protocol framing/schema vectors | D | M | â€” | Round-trip and malformed tests pass |
 | IT-010 | P0 | Local TCP adapter | D | M | IT-009 | Arbitrary framed text both directions |
 | IT-011 | P0 | Bluetooth RFCOMM adapter | D | M | IT-009 | Pair/connect/reconnect on real phones |
 | IT-012 | P0 | Pairing/security library spike | D/A | L | IT-009 | Verified identity + protected records |
@@ -2028,7 +2109,7 @@ Security verification precedes acting on message priority/content; storage failu
 ### 29.2 Questions to send ISRO/SIH organizers
 
 1. The listed weights total 80%. What is the remaining 20%?
-2. What exact minimum phone RAM, CPU architecture, Android version, storage, and thermal conditions define “low” and “mid” range?
+2. What exact minimum phone RAM, CPU architecture, Android version, storage, and thermal conditions define â€œlowâ€ and â€œmidâ€ range?
 3. What bitrate, payload limit, latency, loss rate, and duplex characteristics represent the target link?
 4. Is app-level non-interruptible priority acceptable given stock Android's OS/call/DND controls? Is privileged/system-app deployment actually required?
 5. Are open-weight noncommercial models acceptable, or must model weights permit unrestricted open-source redistribution/use?
@@ -2038,13 +2119,13 @@ Security verification precedes acting on message priority/content; storage failu
 9. Is a physical embedded bridge required at evaluation, and is a separate RF link specified?
 10. What utterance lengths, accents, noise levels, code-switching patterns, and native-listener protocols will be used?
 11. Are cached alert phrases allowed as an optimization if arbitrary offline neural TTS is still implemented and evaluated separately?
-12. Does “highest volume” refer specifically to the loudspeaker, and what safety behavior is expected for headphones?
+12. Does â€œhighest volumeâ€ refer specifically to the loudspeaker, and what safety behavior is expected for headphones?
 
 ### 29.3 Final implementation recommendation
 
 Invest first in a **measured, licensed, arbitrary-speech loop on a real low-end phone**, with Odia included in feasibility testing. Keep audio, models, protocol, and transport modular; preserve final text faithfully; make queue delay and uncertainty audible; and build the complete evidence package as the implementation progresses.
 
-The strongest submission is not the one claiming that a single model solves everything. It is the one that can demonstrate exactly which languages, phones, links, and operating conditions work—and explain failures without hiding them.
+The strongest submission is not the one claiming that a single model solves everything. It is the one that can demonstrate exactly which languages, phones, links, and operating conditions workâ€”and explain failures without hiding them.
 
 ---
 
@@ -2057,13 +2138,15 @@ Sources below were inspected on **9 September 2026**. They support external tech
 - **[S3] ARTPARK-IISc DhVaani-0.5 model card.** Ten requested languages among 27, Apache-2.0 declaration, reference inputs, listed 491 MB weights, flow-matching architecture, and limitations. https://huggingface.co/ARTPARK-IISc/DhVaani-0.5
 - **[S4] AI4Bharat IndicF5 repository.** Listed eleven Indic languages, required reference audio/text, usage. The inspected repository description does not establish all dependency/weight licenses; audit separately. https://github.com/AI4Bharat/IndicF5
 - **[S5] eSpeak NG source, language list, and license.** Requested-language identifiers and build-specific availability guidance; GPL obligations. https://github.com/espeak-ng/espeak-ng ; https://github.com/espeak-ng/espeak-ng/blob/master/docs/languages.md ; https://github.com/espeak-ng/espeak-ng/blob/master/COPYING
-- **[S6] Android Developers — Manage audio focus.** Android 12+ system behavior and Android 15+ top-app/foreground-service requirement. https://developer.android.com/media/optimize/audio-focus
-- **[S7] Android Developers — Foreground service types.** Microphone permission and while-in-use/background-start restrictions. https://developer.android.com/develop/background-work/services/fgs/service-types
-- **[S8] Android Developers — Wi-Fi Direct and nearby Wi-Fi permissions.** Local sockets still require INTERNET permission; modern nearby-device permission requirements. https://developer.android.com/develop/connectivity/wifi/wifi-direct ; https://developer.android.com/develop/connectivity/wifi/wifi-permissions
-- **[S9] Android Developers — Bluetooth permissions.** API-specific scan/connect/advertise and legacy permission guidance. https://developer.android.com/develop/connectivity/bluetooth/bt-permissions
+- **[S6] Android Developers â€” Manage audio focus.** Android 12+ system behavior and Android 15+ top-app/foreground-service requirement. https://developer.android.com/media/optimize/audio-focus
+- **[S7] Android Developers â€” Foreground service types.** Microphone permission and while-in-use/background-start restrictions. https://developer.android.com/develop/background-work/services/fgs/service-types
+- **[S8] Android Developers â€” Wi-Fi Direct and nearby Wi-Fi permissions.** Local sockets still require INTERNET permission; modern nearby-device permission requirements. https://developer.android.com/develop/connectivity/wifi/wifi-direct ; https://developer.android.com/develop/connectivity/wifi/wifi-permissions
+- **[S9] Android Developers â€” Bluetooth permissions.** API-specific scan/connect/advertise and legacy permission guidance. https://developer.android.com/develop/connectivity/bluetooth/bt-permissions
 - **[S10] sherpa-onnx official repository and TTS example.** Offline native speech framework, Android support, example model integration; not a guarantee of arbitrary model compatibility. https://github.com/k2-fsa/sherpa-onnx/tree/master ; https://github.com/k2-fsa/sherpa-onnx/blob/master/python-api-examples/offline-tts.py
 - **[S11] PyTorch ExecuTorch documentation and PyTorch Mobile status discussion.** Current edge deployment direction and legacy mobile maintenance context. https://docs.pytorch.org/executorch/stable/index.html ; https://discuss.pytorch.org/t/pytorch-mobile-current-status/192040
 - **[S12] Meta MMS TTS Odia model card.** CC-BY-NC-4.0 license declaration; requires explicit compliance review rather than assuming unrestricted open-source suitability. https://huggingface.co/facebook/mms-tts-ory
 - **[S13] ARTPARK-IISc Vaani dataset and benchmark cards.** Candidate data/evaluation resources; verify exact licenses, access, subsets, and split protocols before use. https://huggingface.co/datasets/ARTPARK-IISc/Vaani ; https://huggingface.co/datasets/ARTPARK-IISc/Vaani-Benchmark-V1.0
 
 **End of implementation_plan.md**
+
+

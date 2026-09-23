@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import '../audio/playback_controller.dart';
 import '../metrics/metrics.dart';
@@ -71,7 +72,7 @@ class AlertController {
             .synthesize(SynthesisRequest(
               text: alert.text,
               languageTag: alert.languageTag,
-              speakingRate: alertSpeakingRate,
+              speed: alertSpeakingRate,
               isAlert: true,
             ))
             .map((SynthesisChunk chunk) {
@@ -79,8 +80,13 @@ class AlertController {
             reportedPcm = true;
             _metrics.mark(alert.messageId, Stage.b3FirstPcm);
           }
+          // Convert Float32List (-1.0 to 1.0) to Int16List (-32768 to 32767)
+          final int16Samples = Int16List(chunk.samples.length);
+          for (int i = 0; i < chunk.samples.length; i++) {
+            int16Samples[i] = (chunk.samples[i].clamp(-1.0, 1.0) * 32767).round();
+          }
           return PcmChunk(
-            samples: chunk.samples,
+            samples: int16Samples,
             sampleRateHz: chunk.sampleRateHz,
             isLast: chunk.isLast,
           );

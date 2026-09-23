@@ -11,7 +11,7 @@ void main() {
 
       final List<Uint8List> received = <Uint8List>[];
       final FrameAccumulator accumulator = FrameAccumulator(
-        onFrame: (int version, Uint8List body) => received.add(body),
+        (int version, Uint8List body) => received.add(body),
       );
       accumulator.offer(frame);
 
@@ -29,7 +29,7 @@ void main() {
 
       final List<Uint8List> received = <Uint8List>[];
       final FrameAccumulator accumulator = FrameAccumulator(
-        onFrame: (int version, Uint8List body) => received.add(body),
+        (int version, Uint8List body) => received.add(body),
       );
 
       for (int i = 0; i < frame.length; i += 7) {
@@ -47,7 +47,7 @@ void main() {
 
       final List<int> lengths = <int>[];
       final FrameAccumulator accumulator = FrameAccumulator(
-        onFrame: (int version, Uint8List body) => lengths.add(body.length),
+        (int version, Uint8List body) => lengths.add(body.length),
       );
       accumulator.offer(<int>[...first, ...second]);
 
@@ -60,7 +60,7 @@ void main() {
       final List<Uint8List> received = <Uint8List>[];
       final List<String> errors = <String>[];
       final FrameAccumulator accumulator = FrameAccumulator(
-        onFrame: (int version, Uint8List body) => received.add(body),
+        (int version, Uint8List body) => received.add(body),
         onError: (String message) => errors.add(message),
       );
 
@@ -83,7 +83,7 @@ void main() {
 
     test('an empty accumulator buffers nothing', () {
       final FrameAccumulator accumulator = FrameAccumulator(
-        onFrame: (int version, Uint8List body) {},
+        (int version, Uint8List body) {},
       );
       expect(accumulator.bufferedBytes, 0);
     });

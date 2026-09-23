@@ -9,6 +9,11 @@ analyzer:
     # guarantee, so unused imports are errors rather than hints here.
     unused_import: error
     dead_code: error
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+    - windows/**
 
 linter:
   rules:

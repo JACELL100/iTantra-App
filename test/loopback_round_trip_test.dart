@@ -17,7 +17,7 @@ void main() {
 
       final List<Uint8List> received = <Uint8List>[];
       final FrameAccumulator accumulator = FrameAccumulator(
-        onFrame: (int version, Uint8List body) => received.add(body),
+        (int version, Uint8List body) => received.add(body),
       );
       final StreamSubscription<Uint8List> sub =
           b.inbound.listen(accumulator.offer);
@@ -49,7 +49,7 @@ void main() {
 
       final Completer<Uint8List> first = Completer<Uint8List>();
       final FrameAccumulator accumulator = FrameAccumulator(
-        onFrame: (int version, Uint8List body) {
+        (int version, Uint8List body) {
           if (!first.isCompleted) first.complete(body);
         },
       );

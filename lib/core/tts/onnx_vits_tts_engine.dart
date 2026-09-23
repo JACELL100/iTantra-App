@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:onnxruntime/onnxruntime.dart';
@@ -95,7 +96,7 @@ class OnnxVitsTtsEngine implements TtsEngine {
       ..setSessionGraphOptimizationLevel(GraphOptimizationLevel.ortEnableAll);
 
     final _LoadedVoice voice = _LoadedVoice(
-      OrtSession.fromFile(pack.modelPath, options),
+      OrtSession.fromFile(File(pack.modelPath), options),
       Phonemizer.load(
         graphemesPath: pack.assetPath('graphemes.tsv'),
         lexiconPath: pack.assetPath('lexicon.tsv'),
@@ -146,7 +147,7 @@ class OnnxVitsTtsEngine implements TtsEngine {
       final OrtValueTensor scales = OrtValueTensor.createTensorWithDataList(
         Float32List.fromList(<double>[
           noiseScale,
-          1.0 / request.speakingRate,
+          1.0 / request.speed,
           noiseScaleW,
         ]),
         <int>[3],
@@ -166,14 +167,15 @@ class OnnxVitsTtsEngine implements TtsEngine {
         final Float64List audio = _flatten(outputs?.first?.value);
         if (audio.isEmpty) continue;
 
-        final Int16List pcm = _toPcm16(audio);
+        final Float32List pcm = Float32List.fromList(
+          audio.map((d) => d.clamp(-1.0, 1.0)).toList(),
+        );
         producedMs += pcm.length * 1000 ~/ voice.sampleRateHz;
 
         yield SynthesisChunk(
           samples: pcm,
           sampleRateHz: voice.sampleRateHz,
-          isLast: chunk.isLast,
-          chunkIndex: chunk.index,
+          isLast: chunk == chunks.last,
         );
       } finally {
         input.release();
@@ -214,20 +216,6 @@ class OnnxVitsTtsEngine implements TtsEngine {
 
     walk(raw);
     return Float64List.fromList(collected);
-  }
-
-  /// Float waveform in -1..1 to 16-bit PCM, with hard clipping.
-  static Int16List _toPcm16(Float64List audio) {
-    final Int16List pcm = Int16List(audio.length);
-    for (int i = 0; i < audio.length; i++) {
-      final double scaled = audio[i] * 32767.0;
-      pcm[i] = scaled > 32767
-          ? 32767
-          : scaled < -32768
-              ? -32768
-              : scaled.round();
-    }
-    return pcm;
   }
 
   @override

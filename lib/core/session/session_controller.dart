@@ -86,6 +86,7 @@ class SessionController {
     required FloorController floor,
     required AlertController alerts,
     required String Function() languageTag,
+    String? Function()? targetLanguageTag, // null = same-language mode
     AsrEngine? asr,
     TtsEngine? tts,
     VadEngine? vad,
@@ -98,6 +99,7 @@ class SessionController {
         _floor = floor,
         _alerts = alerts,
         _languageTag = languageTag,
+        _targetLanguageTag = targetLanguageTag ?? (() => null),
         _asr = asr,
         _tts = tts,
         _vad = vad ?? EnergyVadEngine(),
@@ -111,6 +113,7 @@ class SessionController {
   final FloorController _floor;
   final AlertController _alerts;
   final String Function() _languageTag;
+  final String? Function() _targetLanguageTag; // Returns target lang or null
   final AsrEngine? _asr;
   final TtsEngine? _tts;
   final VadEngine _vad;
@@ -216,9 +219,12 @@ class SessionController {
 
     final AsrResult result;
     try {
+      // Pass target language if cross-language mode is enabled
+      final String? targetLang = _targetLanguageTag();
       result = await asr.transcribe(
         pcm: utterance.pcm,
         languageTag: language,
+        targetLanguageTag: targetLang,
       );
     } on AsrException catch (e) {
       _events.add(SessionError(e.message, isMissingModel: e.isMissingModel));
@@ -233,6 +239,12 @@ class SessionController {
       return;
     }
 
+    // Determine what to send and what language the receiver should use
+    final String sendLang = result.hasTranslation ? language : language;
+    final String sendText = result.text;
+    final String? translatedText = result.translatedText;
+    final String? targetLang = result.targetLanguageTag;
+
     final StoredMessage stored = StoredMessage(
       id: messageId,
       direction: MessageDirection.outgoing,
@@ -241,16 +253,22 @@ class SessionController {
       createdAtMs: DateTime.now().millisecondsSinceEpoch,
       state: DeliveryState.pending,
       confidence: result.confidence,
+      // Store translation metadata
+      translatedText: translatedText,
+      targetLanguageTag: targetLang,
     );
     await _repository.insert(stored);
     _events.add(SessionMessageStored(stored));
 
     try {
       await _pipeline.sendText(
-        text: result.text,
+        text: sendText,
         languageTag: language,
         confidence: result.confidence,
         messageId: messageId,
+        srcLang: language,
+        tgtLang: targetLang,
+        translatedText: translatedText,
       );
       await _repository.updateState(messageId, DeliveryState.sent);
       _events.add(SessionMessageUpdated(messageId, DeliveryState.sent));
@@ -342,21 +360,30 @@ class SessionController {
   }
 
   Future<void> _handleText(TextMessage text) async {
+    // Use translated text and target language if this is a cross-language message
+    final speakLang = text.speakLanguage;
+    final speakText = text.speakText;
+
     final StoredMessage stored = await _repository.insertIncoming(
       id: text.messageId,
-      languageTag: text.languageTag,
-      text: text.text,
+      languageTag: speakLang,
+      text: speakText,
       isAlert: false,
       peerId: text.senderId,
       confidence: text.confidencePercent / 100.0,
+      // Store original + translation metadata
+      originalText: text.text,
+      originalLanguageTag: text.languageTag,
+      translatedText: text.translatedText,
+      targetLanguageTag: text.tgtLang,
     );
     _metrics.mark(text.messageId, Stage.b1Stored);
     _events.add(SessionMessageStored(stored));
 
     await _speak(
       messageId: text.messageId,
-      text: text.text,
-      languageTag: text.languageTag,
+      text: speakText,
+      languageTag: speakLang,
     );
 
     await _pipeline.sendReceipt(text.messageId);
@@ -413,8 +440,13 @@ class SessionController {
         sawFirstChunk = true;
         _metrics.mark(messageId, Stage.b3FirstPcm);
       }
+      // Convert Float32List (-1.0 to 1.0) to Int16List (-32768 to 32767)
+      final int16Samples = Int16List(chunk.samples.length);
+      for (int i = 0; i < chunk.samples.length; i++) {
+        int16Samples[i] = (chunk.samples[i].clamp(-1.0, 1.0) * 32767).round();
+      }
       return PcmChunk(
-        samples: chunk.samples,
+        samples: int16Samples,
         sampleRateHz: chunk.sampleRateHz,
         isLast: chunk.isLast,
       );

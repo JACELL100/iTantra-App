@@ -109,9 +109,15 @@ class TextMessage extends WireMessage {
     required this.text,
     required this.confidencePercent,
     this.isFinal = true,
+    this.srcLang,
+    this.tgtLang,
+    this.translatedText,
   });
 
+  /// Source language (BCP-47). For backward compat, equals languageTag.
   final String languageTag;
+
+  /// Transcribed text in source language.
   final String text;
 
   /// Percent, as an integer, because a float would cost bytes and nobody
@@ -119,6 +125,15 @@ class TextMessage extends WireMessage {
   final int confidencePercent;
 
   final bool isFinal;
+
+  /// Source language for translation (may differ from languageTag if LID used).
+  final String? srcLang;
+
+  /// Target language for translation (null = same-language mode).
+  final String? tgtLang;
+
+  /// Translated text in target language (present when tgtLang != null).
+  final String? translatedText;
 
   @override
   MessageKind get kind => MessageKind.text;
@@ -132,6 +147,9 @@ class TextMessage extends WireMessage {
         'x': text,
         'q': confidencePercent,
         'f': isFinal,
+        if (srcLang != null) 'sl': srcLang,
+        if (tgtLang != null) 'tl': tgtLang,
+        if (translatedText != null) 'tx': translatedText,
       };
 
   static TextMessage fromJson(Map<String, Object?> json) => TextMessage(
@@ -141,7 +159,19 @@ class TextMessage extends WireMessage {
         text: json['x']! as String,
         confidencePercent: (json['q'] as int?) ?? 0,
         isFinal: (json['f'] as bool?) ?? true,
+        srcLang: json['sl'] as String?,
+        tgtLang: json['tl'] as String?,
+        translatedText: json['tx'] as String?,
       );
+
+  /// Language the receiver should speak (tgtLang if present, else languageTag).
+  String get speakLanguage => tgtLang ?? languageTag;
+
+  /// Text the receiver should speak (translatedText if present, else text).
+  String get speakText => translatedText ?? text;
+
+  /// Whether this is a cross-language message.
+  bool get isCrossLanguage => tgtLang != null && tgtLang != languageTag;
 }
 
 /// A non-interruptible announcement.

@@ -67,7 +67,10 @@ class TcpTransport implements TransportAdapter {
   ServerSocket? _server;
   Socket? _socket;
   StreamSubscription<Uint8List>? _socketSub;
-  late final FrameAccumulator _accumulator = FrameAccumulator(_onFrame);
+  late final FrameAccumulator _accumulator = FrameAccumulator(
+    (version, payload) {}, // Primary callback (required)
+    onFrameOnly: _onFrame,
+  );
 
   int _sent = 0;
   int _received = 0;

@@ -24,6 +24,9 @@ class PlatformCapabilities {
     required this.supportsWifiTcp,
     required this.canHostSoftAp,
     required this.backgroundAudioMode,
+    required this.totalRamBytes,
+    required this.availableRamBytes,
+    required this.gpuDelegateAvailable,
   });
 
   /// `"android"` or `"ios"`.
@@ -61,12 +64,37 @@ class PlatformCapabilities {
   /// Whether audio keeps running with the screen off.
   final bool backgroundAudioMode;
 
+  /// Total physical RAM in bytes.
+  final int totalRamBytes;
+
+  /// Currently available RAM in bytes (for model loading decisions).
+  final int availableRamBytes;
+
+  /// Whether GPU delegate (NNAPI/Metal) is available for accelerated inference.
+  final bool gpuDelegateAvailable;
+
   bool get isIOS => platform == 'ios';
   bool get isAndroid => platform == 'android';
 
   /// True when alert loudness depends on the user's volume setting, so the
   /// UI should say so rather than imply a guarantee it cannot keep.
   bool get alertVolumeIsAdvisory => !canForceAlertVolume;
+
+  /// Whether device can run Gemma 4 E2B (needs ~1.1 GB resident + headroom).
+  /// 6 GB+ total RAM recommended; 4-6 GB may work with GPU delegate.
+  bool get canRunGemma => totalRamBytes >= 4 * 1024 * 1024 * 1024;
+
+  /// Recommended ASR backend for this device.
+  /// 'gemma' for 6 GB+ with GPU, 'onnx_ctc' otherwise.
+  String get recommendedAsrBackend {
+    if (totalRamBytes >= 6 * 1024 * 1024 * 1024 && gpuDelegateAvailable) {
+      return 'gemma';
+    }
+    if (totalRamBytes >= 4 * 1024 * 1024 * 1024 && gpuDelegateAvailable) {
+      return 'gemma'; // may work but slower
+    }
+    return 'onnx_ctc';
+  }
 
   /// Conservative defaults used if the platform channel is unavailable, for
   /// example in unit tests. Assumes the *weaker* platform so nothing
@@ -82,12 +110,17 @@ class PlatformCapabilities {
         supportsWifiTcp: true,
         canHostSoftAp: false,
         backgroundAudioMode: true,
+        totalRamBytes: 2 * 1024 * 1024 * 1024, // 2 GB conservative
+        availableRamBytes: 1 * 1024 * 1024 * 1024,
+        gpuDelegateAvailable: false,
       );
 
   static PlatformCapabilities _fromMap(Map<Object?, Object?> map) {
     bool flag(String key, {bool orElse = false}) =>
         (map[key] as bool?) ?? orElse;
     String text(String key) => (map[key] as String?) ?? 'unknown';
+    int intVal(String key, {int orElse = 0}) =>
+        (map[key] as int?) ?? orElse;
 
     return PlatformCapabilities(
       platform: text('platform'),
@@ -100,6 +133,9 @@ class PlatformCapabilities {
       supportsWifiTcp: flag('supportsWifiTcp', orElse: true),
       canHostSoftAp: flag('canHostSoftAp'),
       backgroundAudioMode: flag('backgroundAudioMode', orElse: true),
+      totalRamBytes: intVal('totalRamBytes', orElse: 2 * 1024 * 1024 * 1024),
+      availableRamBytes: intVal('availableRamBytes', orElse: 1 * 1024 * 1024 * 1024),
+      gpuDelegateAvailable: flag('gpuDelegateAvailable'),
     );
   }
 }

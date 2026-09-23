@@ -135,26 +135,33 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
 class _LatencyRow extends StatelessWidget {
   const _LatencyRow({
     required this.label,
-    required this.summary,
+    this.summary,
     this.targetP95,
   });
 
   final String label;
-  final LatencySummary summary;
+  final LatencySummary? summary;
   final double? targetP95;
 
   @override
   Widget build(BuildContext context) {
+    if (summary == null) {
+      return ListTile(
+        dense: true,
+        title: Text(label),
+        subtitle: const Text('No data yet'),
+      );
+    }
     final double? target = targetP95;
-    final bool over = target != null && summary.p95 > target;
+    final bool over = target != null && summary!.p95 > target;
 
     return ListTile(
       dense: true,
       title: Text(label),
-      subtitle: Text('n = ${summary.count}'
+      subtitle: Text('n = ${summary!.count}'
           '${target == null ? '' : '  ·  target p95 ${_fmt(target)}'}'),
       trailing: Text(
-        'p50 ${_fmt(summary.p50)}   p95 ${_fmt(summary.p95)}',
+        'p50 ${_fmt(summary!.p50)}   p95 ${_fmt(summary!.p95)}',
         style: TextStyle(
           fontWeight: FontWeight.w600,
           // Red when a scored target is missed. Better to see it here than

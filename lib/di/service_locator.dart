@@ -3,10 +3,12 @@ import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/asr/asr_engine.dart';
+import '../core/asr/gemma_asr_engine.dart';
 import '../core/asr/onnx_ctc_asr_engine.dart';
 import '../core/audio/capture_engine.dart';
 import '../core/audio/playback_controller.dart';
 import '../core/metrics/metrics.dart';
+import '../core/models/model_pack.dart';
 import '../core/models/model_pack_manager.dart';
 import '../core/platform/platform_capabilities.dart';
 import '../core/security/session_crypto.dart';
@@ -78,6 +80,7 @@ class ServiceLocator {
 
   static const String _deviceIdKey = 'device_id';
   static const String _languageKey = 'language_tag';
+  static const String _targetLanguageKey = 'target_language_tag'; // null = same-lang
 
   TransportAdapter? _transport;
   MessagePipeline? _pipeline;
@@ -94,6 +97,17 @@ class ServiceLocator {
 
   Future<void> setLanguageTag(String tag) async {
     await preferences.setString(_languageKey, tag);
+  }
+
+  String? get targetLanguageTag =>
+      preferences.getString(_targetLanguageKey);
+
+  Future<void> setTargetLanguageTag(String? tag) async {
+    if (tag == null) {
+      await preferences.remove(_targetLanguageKey);
+    } else {
+      await preferences.setString(_targetLanguageKey, tag);
+    }
   }
 
   static Future<ServiceLocator> bootstrap() async {
@@ -122,11 +136,38 @@ class ServiceLocator {
     final ItantraDatabase database = await ItantraDatabase.open();
     final MessageRepository repository = MessageRepository(database);
 
-    final bool hasAsr = packs.packs.any((p) => p.role.code == 'asr');
-    final bool hasTts = packs.packs.any((p) => p.role.code == 'tts');
+    // Find available ASR packs
+    final List<ModelPack> asrPacks = packs.packs
+        .where((p) => p.role == PackRole.asr)
+        .toList(growable: false);
+    final List<ModelPack> ttsPacks = packs.packs
+        .where((p) => p.role == PackRole.tts)
+        .toList(growable: false);
+
+    // Check for Gemma pack (single pack covers all languages)
+    ModelPack? gemmaPack;
+    for (final p in asrPacks) {
+      if (p.id.contains('gemma')) {
+        gemmaPack = p;
+        break;
+      }
+    }
+    final bool hasGemma = gemmaPack != null;
+    final bool hasOnnxCtc = asrPacks.any((p) => !p.id.contains('gemma'));
+    final bool hasTts = ttsPacks.isNotEmpty;
+
+    // Select ASR backend based on device capability and available packs
+    AsrEngine? asr;
+    if (hasGemma && capabilities.canRunGemma && capabilities.recommendedAsrBackend == 'gemma') {
+      ItLog.i('boot', 'Using Gemma 4 E2B ASR (primary)');
+      asr = GemmaAsrEngine(modelPath: gemmaPack!.modelPath);
+    } else if (hasOnnxCtc) {
+      ItLog.i('boot', 'Using ONNX CTC ASR (fallback)');
+      asr = OnnxCtcAsrEngine(packs: packs);
+    }
 
     ItLog.i('boot',
-        'packs: ${packs.packs.length}, asr=$hasAsr, tts=$hasTts');
+        'packs: ${packs.packs.length}, asr=${asr != null ? asr.runtimeType : "none"}, tts=$hasTts, backend=${capabilities.recommendedAsrBackend}');
 
     final ServiceLocator locator = ServiceLocator._(
       preferences: preferences,
@@ -139,9 +180,7 @@ class ServiceLocator {
       platformInfo: platformInfo,
       capabilities: capabilities,
       deviceId: deviceId,
-      asr: hasAsr
-          ? OnnxCtcAsrEngine(packs: packs, metrics: metrics)
-          : null,
+      asr: asr,
       tts: hasTts
           ? OnnxVitsTtsEngine(packs: packs, metrics: metrics)
           : null,
@@ -185,6 +224,7 @@ class ServiceLocator {
       floor: floor,
       alerts: alerts,
       languageTag: () => languageTag,
+      targetLanguageTag: () => targetLanguageTag,
       asr: asr,
       tts: tts,
     );

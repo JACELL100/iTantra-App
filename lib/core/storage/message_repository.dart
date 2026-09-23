@@ -37,6 +37,10 @@ class MessageRepository {
     String? severity,
     String? peerId,
     double confidence = 1.0,
+    String? originalText,
+    String? originalLanguageTag,
+    String? translatedText,
+    String? targetLanguageTag,
   }) async {
     final StoredMessage message = StoredMessage(
       id: id,
@@ -49,6 +53,10 @@ class MessageRepository {
       isAlert: isAlert,
       severity: severity,
       peerId: peerId,
+      originalText: originalText,
+      originalLanguageTag: originalLanguageTag,
+      translatedText: translatedText,
+      targetLanguageTag: targetLanguageTag,
     );
     await insert(message);
     return message;

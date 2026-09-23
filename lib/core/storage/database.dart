@@ -14,7 +14,7 @@ class ItantraDatabase {
   final Database db;
 
   static const String fileName = 'itantra.db';
-  static const int schemaVersion = 2;
+  static const int schemaVersion = 3;
 
   static Future<ItantraDatabase> open({String? directory}) async {
     final String base = directory ?? await getDatabasesPath();
@@ -28,9 +28,11 @@ class ItantraDatabase {
       onCreate: (Database db, int version) async {
         await _createV1(db);
         await _upgradeToV2(db);
+        await _upgradeToV3(db);
       },
       onUpgrade: (Database db, int from, int to) async {
         if (from < 2) await _upgradeToV2(db);
+        if (from < 3) await _upgradeToV3(db);
       },
     );
     return ItantraDatabase._(database);
@@ -85,6 +87,24 @@ class ItantraDatabase {
     ''');
     await db.execute(
         'CREATE INDEX IF NOT EXISTS idx_latency_metric ON latency_samples (metric)');
+  }
+
+  /// v3 adds translation fields for cross-language support.
+  static Future<void> _upgradeToV3(Database db) async {
+    // Add columns if they don't exist (SQLite doesn't support IF NOT EXISTS for columns)
+    // We use a try-catch approach since ALTER TABLE ADD COLUMN fails if column exists
+    try {
+      await db.execute('ALTER TABLE messages ADD COLUMN original_text TEXT');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE messages ADD COLUMN original_language_tag TEXT');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE messages ADD COLUMN translated_text TEXT');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE messages ADD COLUMN target_language_tag TEXT');
+    } catch (_) {}
   }
 
   Future<void> close() => db.close();

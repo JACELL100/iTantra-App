@@ -149,6 +149,9 @@ class MessagePipeline {
     required String languageTag,
     required double confidence,
     String? messageId,
+    String? srcLang,
+    String? tgtLang,
+    String? translatedText,
   }) async {
     final TextMessage message = TextMessage(
       messageId: messageId ?? newMessageId(),
@@ -156,6 +159,9 @@ class MessagePipeline {
       languageTag: languageTag,
       text: text,
       confidencePercent: (confidence * 100).round().clamp(0, 100),
+      srcLang: srcLang,
+      tgtLang: tgtLang,
+      translatedText: translatedText,
     );
     await send(message);
     return message;

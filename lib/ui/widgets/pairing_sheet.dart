@@ -57,7 +57,7 @@ class PairingSheet extends StatelessWidget {
                 padding: const EdgeInsets.all(12),
                 color: Colors.white,
                 child: QrImageView(
-                  data: payload.toUri(),
+                  data: payload.toUri().toString(),
                   size: 200,
                   // High error correction, no embedded logo: this may be
                   // scanned off a cracked screen in poor light.

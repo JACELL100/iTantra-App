@@ -20,6 +20,10 @@ class StoredMessage {
     this.severity,
     this.peerId,
     this.latencyMs,
+    this.originalText,
+    this.originalLanguageTag,
+    this.translatedText,
+    this.targetLanguageTag,
   });
 
   final String id;
@@ -37,11 +41,26 @@ class StoredMessage {
   final String? peerId;
   final double? latencyMs;
 
+  /// Original transcribed text (source language) for cross-language messages.
+  final String? originalText;
+
+  /// Original source language for cross-language messages.
+  final String? originalLanguageTag;
+
+  /// Translated text in target language.
+  final String? translatedText;
+
+  /// Target language for translation.
+  final String? targetLanguageTag;
+
   /// Below this the transcript is shown with a warning marker so the reader
   /// treats it with suspicion instead of acting on a misheard place name.
   static const double lowConfidenceThreshold = 0.55;
 
   bool get isLowConfidence => confidence < lowConfidenceThreshold;
+
+  /// Whether this message has a translation.
+  bool get hasTranslation => translatedText != null && translatedText!.isNotEmpty;
 
   StoredMessage copyWith({
     DeliveryState? state,
@@ -60,6 +79,10 @@ class StoredMessage {
         severity: severity,
         peerId: peerId,
         latencyMs: latencyMs ?? this.latencyMs,
+        originalText: originalText,
+        originalLanguageTag: originalLanguageTag,
+        translatedText: translatedText,
+        targetLanguageTag: targetLanguageTag,
       );
 
   Map<String, Object?> toRow() => <String, Object?>{
@@ -74,6 +97,10 @@ class StoredMessage {
         'severity': severity,
         'peer_id': peerId,
         'latency_ms': latencyMs,
+        'original_text': originalText,
+        'original_language_tag': originalLanguageTag,
+        'translated_text': translatedText,
+        'target_language_tag': targetLanguageTag,
       };
 
   static StoredMessage fromRow(Map<String, Object?> row) => StoredMessage(
@@ -94,6 +121,10 @@ class StoredMessage {
         severity: row['severity'] as String?,
         peerId: row['peer_id'] as String?,
         latencyMs: (row['latency_ms'] as num?)?.toDouble(),
+        originalText: row['original_text'] as String?,
+        originalLanguageTag: row['original_language_tag'] as String?,
+        translatedText: row['translated_text'] as String?,
+        targetLanguageTag: row['target_language_tag'] as String?,
       );
 }
 

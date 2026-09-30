@@ -13,7 +13,7 @@ import 'di/service_locator.dart';
 /// scan decides which languages the UI may offer; showing a language picker
 /// and then removing options a second later is worse than a short splash.
 Future<void> main() async {
-  runZonedGuarded<Future<void>>(() async {
+  await runZonedGuarded<Future<void>>(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
     // Landscape would put the talk button somewhere different on every

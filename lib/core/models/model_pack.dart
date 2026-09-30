@@ -49,6 +49,7 @@ class ModelPack {
     this.isRedistributable = true,
     this.sampleRateHz,
     this.notes,
+    this.modelFileName,
   });
 
   final String languageTag;
@@ -72,10 +73,28 @@ class ModelPack {
 
   final int? sampleRateHz;
   final String? notes;
+  final String? modelFileName;
 
   String get id => '$languageTag-${role.code}';
 
-  String get modelPath => p.join(directory, 'model.onnx');
+  String get modelPath {
+    final String? custom = modelFileName;
+    if (custom != null && custom.isNotEmpty) {
+      return p.join(directory, custom);
+    }
+    for (final String candidate in const <String>[
+      'model.onnx',
+      'gemma-4-e2b.litertlm',
+      'model.litertlm',
+      'model.bin',
+      'model.task',
+    ]) {
+      if (File(p.join(directory, candidate)).existsSync()) {
+        return p.join(directory, candidate);
+      }
+    }
+    return p.join(directory, 'model.onnx');
+  }
 
   /// Auxiliary file inside the pack, e.g. tokens.txt or graphemes.tsv.
   String assetPath(String name) => p.join(directory, name);
@@ -86,14 +105,20 @@ class ModelPack {
     Map<String, Object?> json, {
     required String directory,
   }) {
-    final Object? language = json['language'];
-    final Object? role = json['role'];
+    final Object? language = json['language'] ??
+        (json['languages'] as List?)?.firstOrNull ??
+        (json['languageTags'] as List?)?.firstOrNull;
+    final Object? role = json['role'] ?? json['task'];
     if (language is! String || role is! String) {
       throw const ModelPackError('manifest needs language and role');
     }
+    final String? modelFile = (json['modelFile'] as String?) ??
+        (json['model_file'] as String?) ??
+        ((json['files'] as List?)?.firstOrNull as Map?)?['path'] as String?;
+
     return ModelPack(
       languageTag: language,
-      role: PackRole.fromCode(role),
+      role: PackRole.fromCode(role.toLowerCase()),
       directory: directory,
       digestHex: (json['sha256'] as String?) ?? '',
       sizeBytes: (json['sizeBytes'] as int?) ?? 0,
@@ -102,6 +127,7 @@ class ModelPack {
       isRedistributable: (json['redistributable'] as bool?) ?? true,
       sampleRateHz: json['sampleRateHz'] as int?,
       notes: json['notes'] as String?,
+      modelFileName: modelFile,
     );
   }
 

@@ -9,7 +9,7 @@ void main() {
 
   group('ProtocolCodec', () {
     test('round-trips a text message', () {
-      final TextMessage original = TextMessage(
+      const TextMessage original = TextMessage(
         messageId: 'abc123',
         senderId: 'phone-a',
         languageTag: 'hi-IN',
@@ -27,7 +27,7 @@ void main() {
     });
 
     test('round-trips an alert with its severity and repeat count', () {
-      final AlertMessage original = AlertMessage(
+      const AlertMessage original = AlertMessage(
         messageId: 'alert1',
         senderId: 'phone-a',
         languageTag: 'ta-IN',
@@ -43,7 +43,7 @@ void main() {
     });
 
     test('round-trips a receipt', () {
-      final ReceiptMessage original = ReceiptMessage(
+      const ReceiptMessage original = ReceiptMessage(
         messageId: 'r1',
         senderId: 'phone-b',
         acknowledgedId: 'abc123',
@@ -60,7 +60,7 @@ void main() {
       // The whole premise is a low bitrate link: a short utterance has to fit
       // comfortably inside a couple of hundred bytes, or Bluetooth LE
       // bridging becomes impossible.
-      final Uint8List encoded = codec.encode(TextMessage(
+      final Uint8List encoded = codec.encode(const TextMessage(
         messageId: 'abc123',
         senderId: 'phone-a',
         languageTag: 'hi-IN',
@@ -73,7 +73,7 @@ void main() {
     test('preserves non-Latin text exactly', () {
       // \u0939\u093F\u0928\u094D\u0926\u0940 is "Hindi" in Devanagari.
       const String native = '\u0939\u093F\u0928\u094D\u0926\u0940';
-      final TextMessage decoded = codec.decode(codec.encode(TextMessage(
+      final TextMessage decoded = codec.decode(codec.encode(const TextMessage(
         messageId: 'u1',
         senderId: 'phone-a',
         languageTag: 'hi-IN',

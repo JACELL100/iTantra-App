@@ -160,7 +160,7 @@ class ServiceLocator {
     AsrEngine? asr;
     if (hasGemma && capabilities.canRunGemma && capabilities.recommendedAsrBackend == 'gemma') {
       ItLog.i('boot', 'Using Gemma 4 E2B ASR (primary)');
-      asr = GemmaAsrEngine(modelPath: gemmaPack!.modelPath);
+      asr = GemmaAsrEngine(modelPath: gemmaPack.modelPath);
     } else if (hasOnnxCtc) {
       ItLog.i('boot', 'Using ONNX CTC ASR (fallback)');
       asr = OnnxCtcAsrEngine(packs: packs);

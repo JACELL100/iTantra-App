@@ -11,7 +11,16 @@
       Link-local TCP to a paired phone does not need it.
     -->
 
+    <!--
+      INTERNET is required for local TCP sockets on the same Wi-Fi network.
+      It does not grant internet access; we have no cloud dependencies.
+      See implementation_plan.md §1.2 note 2.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Keeps the capture thread alive when the screen turns off. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -59,7 +68,7 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
-        android:largeHeap="false">
+        android:largeHeap="true">
 
         <activity
             android:name=".MainActivity"

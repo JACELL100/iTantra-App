@@ -74,11 +74,14 @@ void main() {
       final (TransportAdapter a, TransportAdapter b) =
           LoopbackTransport.pair(profile: LinkProfile.ideal, seed: 1);
 
+      final Future<LinkState> stateA = a.state.first;
+      final Future<LinkState> stateB = b.state.first;
+
       await a.connect();
       await b.connect();
 
-      expect(a.state, isA<LinkConnected>());
-      expect(b.state, isA<LinkConnected>());
+      expect(await stateA, isA<LinkConnected>());
+      expect(await stateB, isA<LinkConnected>());
 
       await a.close();
       await b.close();

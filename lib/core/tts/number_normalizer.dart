@@ -209,7 +209,11 @@ class NumberNormalizer {
     // Digit strings that are identifiers rather than quantities - a five
     // digit grid reference, say - are read digit by digit, which is how
     // radio operators read them anyway and avoids inventing wrong grammar.
-    if (token.length > 4 || (token.length > 1 && token.startsWith('0'))) {
+    // Round quantities (ending in 00, like 200000 for 2 lakh) are spoken with scale words.
+    final bool isRoundQuantity = value >= 100 && value % 100 == 0;
+    if ((token.length > 4 && !isRoundQuantity) ||
+        (token.length > 1 && token.startsWith('0')) ||
+        token.length > 9) {
       return token.split('').map((String d) => digits[int.parse(d)]).join(' ');
     }
 

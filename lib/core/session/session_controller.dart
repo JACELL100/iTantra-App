@@ -240,7 +240,6 @@ class SessionController {
     }
 
     // Determine what to send and what language the receiver should use
-    final String sendLang = result.hasTranslation ? language : language;
     final String sendText = result.text;
     final String? translatedText = result.translatedText;
     final String? targetLang = result.targetLanguageTag;
@@ -329,17 +328,17 @@ class SessionController {
 
   Future<void> _handleMessage(WireMessage message) async {
     switch (message) {
-      case TextMessage text:
+      case final TextMessage text:
         await _handleText(text);
-      case AlertMessage alert:
+      case final AlertMessage alert:
         await _handleAlert(alert);
-      case ReceiptMessage receipt:
+      case final ReceiptMessage receipt:
         _metrics.mark(receipt.acknowledgedId, Stage.a5Receipt);
         await _repository.updateState(
             receipt.acknowledgedId, DeliveryState.played);
         _events.add(SessionMessageUpdated(
             receipt.acknowledgedId, DeliveryState.played));
-      case FloorMessage floor:
+      case final FloorMessage floor:
         _handleFloor(floor);
       case CapabilitiesMessage():
         // Handled by the pairing flow, which owns capability state.

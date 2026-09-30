@@ -31,7 +31,7 @@ dependencies:
 
   # Gemma 4 E2B via LiteRT-LM. Community Flutter binding for on-device LLM.
   # Apache-2.0. Used for ASR + translation on 6 GB+ devices.
-  flutter_gemma: ^0.1.0
+  flutter_gemma: ^0.4.0
 
   # Local persistence for the conversation log. BSD-2.
   sqflite: ^2.3.3
@@ -58,6 +58,12 @@ dependencies:
 
   # QR pairing: generation is offline, scanning uses the on-device camera. MIT.
   qr_flutter: ^4.1.0
+
+  # QR code scanning for pairing flow. Apache-2.0.
+  mobile_scanner: ^5.2.3
+
+  # UUID generation for message IDs (dart:math is used as fallback). MIT.
+  uuid: ^4.4.0
 
 dev_dependencies:
   flutter_test:

@@ -68,6 +68,27 @@ class ModelPackManager {
     _problems.clear();
 
     final Directory dir = await root();
+
+    // In development or test, seed packs from assets/packs if app-support packs dir is empty
+    final Directory assetPacksDir = Directory('assets/packs');
+    if (dir.listSync().whereType<Directory>().isEmpty && assetPacksDir.existsSync()) {
+      for (final FileSystemEntity entity in assetPacksDir.listSync()) {
+        if (entity is Directory) {
+          final String packName = p.basename(entity.path);
+          final Directory dest = Directory(p.join(dir.path, packName));
+          dest.createSync(recursive: true);
+          for (final FileSystemEntity file in entity.listSync(recursive: true)) {
+            if (file is File) {
+              final String rel = p.relative(file.path, from: entity.path);
+              final File target = File(p.join(dest.path, rel));
+              target.parent.createSync(recursive: true);
+              file.copySync(target.path);
+            }
+          }
+        }
+      }
+    }
+
     for (final FileSystemEntity entity in dir.listSync()) {
       if (entity is! Directory) continue;
       final File manifest = File(p.join(entity.path, 'manifest.json'));
@@ -84,7 +105,7 @@ class ModelPackManager {
         final ModelPack pack =
             ModelPack.fromManifest(parsed, directory: entity.path);
         if (!File(pack.modelPath).existsSync()) {
-          _problems.add('${pack.id}: model.onnx missing');
+          _problems.add('${pack.id}: ${p.basename(pack.modelPath)} missing');
           continue;
         }
         _packs[pack.id] = pack;

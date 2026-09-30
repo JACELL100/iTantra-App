@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 
@@ -25,6 +24,21 @@ class BluetoothRfcommTransport implements TransportAdapter {
     this.peerName = 'Bluetooth peer',
   }) : assert(isServer || peerAddress != null,
             'a client needs the peer MAC address');
+
+  /// Server role: wait for the peer to connect to us.
+  factory BluetoothRfcommTransport.server() =>
+      BluetoothRfcommTransport(isServer: true);
+
+  /// Client role: dial the peer at [peerAddress].
+  factory BluetoothRfcommTransport.client({
+    required String peerAddress,
+    String peerName = 'Bluetooth peer',
+  }) =>
+      BluetoothRfcommTransport(
+        isServer: false,
+        peerAddress: peerAddress,
+        peerName: peerName,
+      );
 
   static const MethodChannel _control =
       MethodChannel('org.itantra/rfcomm');
